@@ -1,16 +1,16 @@
 import axios from 'axios';
-import dotenv from 'dotenv';
-dotenv.config();
 
+// Vite lee las variables desde import.meta.env
+const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
-const BASE = process.env.REACT_APP_API_BASE_URL || 'http://localhost:3001/api';
+const api = axios.create({
+  baseURL: BASE,
+});
 
-// ─── HTTP client ──────────────────────────────────────────────────────────────
-
-const http = axios.create({ baseURL: BASE });
+export default api;
 
 // Attach JWT from memory on every request
-http.interceptors.request.use((config) => {
+api.interceptors.request.use((config) => {
   const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
