@@ -66,7 +66,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-button { font-family: inherit; }
+button { font-family: inherit; color: inherit; }
 input { font-family: inherit; }
 
 /* ============================================================
@@ -592,7 +592,7 @@ input { font-family: inherit; }
 .tab:hover { color: var(--ink); background: var(--surface-2); }
 .tab.active {
   background: var(--ink);
-  color: white;
+  color: var(--bg);
 }
 
 .catalog-grid {
@@ -1343,7 +1343,7 @@ input { font-family: inherit; }
   font-weight: 600;
   cursor: pointer;
 }
-.range-pill.active { background: var(--ink); color: white; border-color: var(--ink); }
+.range-pill.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 
 .kpis {
   display: grid;
@@ -1369,6 +1369,8 @@ input { font-family: inherit; }
 .kpi-delta { font-size: 12px; font-weight: 600; }
 .kpi-delta.up { color: #10b981; }
 .kpi-delta.down { color: var(--magenta); }
+
+.kpis-loading { opacity: 0.55; pointer-events: none; transition: opacity 0.2s ease; }
 
 .ana-grid {
   display: grid;
@@ -1752,7 +1754,7 @@ input { font-family: inherit; }
   left: 50%;
   transform: translateX(-50%);
   background: var(--ink);
-  color: white;
+  color: var(--bg);
   padding: 14px 22px 14px 14px;
   border-radius: 14px;
   display: flex;
@@ -1775,7 +1777,7 @@ input { font-family: inherit; }
   display: grid; place-items: center;
 }
 .toast-title { font-size: 14px; font-weight: 700; }
-.toast-sub { font-size: 12px; color: rgba(255,255,255,0.7); margin-top: 2px; }
+.toast-sub { font-size: 12px; color: var(--ink-dim); margin-top: 2px; }
 
 /* ============================================================
    Responsive
@@ -2509,6 +2511,90 @@ select.form-input { appearance: none; padding-right: 32px; cursor: pointer;
 .cat-chip.add:hover { color: var(--magenta); border-color: var(--magenta); }
 
 /* Promos */
+.prod-promo-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 100px;
+  background: var(--magenta);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.prod-promo-price {
+  color: var(--magenta);
+  font-weight: 700;
+  display: block;
+  line-height: 1.1;
+}
+.prod-price s {
+  color: var(--ink-faint);
+  font-weight: 400;
+  font-size: 12px;
+  display: block;
+  line-height: 1.2;
+  text-decoration: line-through;
+}
+
+.promo-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 24px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.promo-strip::-webkit-scrollbar { display: none; }
+.promo-strip-label {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--magenta);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.promo-chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 14px;
+  border-radius: 100px;
+  border: 1px solid var(--magenta);
+  background: var(--magenta-soft);
+  color: var(--magenta-deep);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  white-space: nowrap;
+}
+.promo-chip:hover:not(:disabled) {
+  background: var(--magenta);
+  color: white;
+}
+.promo-chip:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.promo-chip.dim {
+  opacity: 0.55;
+  border-style: dashed;
+}
+[data-theme="dark"] .promo-chip {
+  background: rgba(222, 15, 171, 0.15);
+  color: #f5a0de;
+  border-color: #b00d87;
+}
+[data-theme="dark"] .promo-chip:hover:not(:disabled) {
+  background: var(--magenta-deep);
+  color: white;
+}
+
 .promo-list { display: flex; flex-direction: column; gap: 8px; }
 .promo-row {
   display: flex;
@@ -3082,7 +3168,7 @@ select.form-input { appearance: none; padding-right: 32px; cursor: pointer;
   padding: 14px 22px 14px 14px;
   border-radius: 14px;
   background: var(--ink);
-  color: white;
+  color: var(--bg);
   box-shadow: var(--shadow-lg);
   z-index: 2000;
   animation: slideUp 0.3s ease;
@@ -3099,7 +3185,7 @@ select.form-input { appearance: none; padding-right: 32px; cursor: pointer;
   display: grid; place-items: center;
 }
 .punch-toast-title { font-size: 14px; font-weight: 700; }
-.punch-toast-sub { font-size: 12px; color: rgba(255,255,255,.72); margin-top: 2px; }
+.punch-toast-sub { font-size: 12px; color: var(--ink-dim); margin-top: 2px; }
 
 /* ============================================================
    Catalog item modal + goal modal extras
@@ -3656,7 +3742,7 @@ select.form-input { appearance: none; padding-right: 32px; cursor: pointer;
 }
 .role-tog.active {
   background: var(--ink);
-  color: white;
+  color: var(--bg);
   box-shadow: var(--shadow-sm);
 }
 

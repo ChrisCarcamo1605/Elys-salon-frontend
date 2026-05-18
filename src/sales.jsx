@@ -1,20 +1,26 @@
-// Sales / POS screen
-// Left: catalog with category tabs + search
-// Right: cart with discount popup, totals, payment
-
 import React from 'react';
 import { Icons } from './icons.jsx';
 import { TopBar } from './menu.jsx';
 import { catalog as catalogApi, sales as salesApi, apiError } from './api.js';
 
-function SaleScreen({ user, data, onLock, onBack, onComplete }) {
+function parsePromoOff(off) {
+  if (!off) return null;
+  const pct = off.match(/^(\d+(?:\.\d+)?)\s*%/);
+  if (pct) return { kind: 'percent', value: parseFloat(pct[1]) };
+  const amt = off.match(/^\$?\s*(\d+(?:\.\d+)?)\s*(?:off)?$/i);
+  if (amt) return { kind: 'amount', value: parseFloat(amt[1]) };
+  return null;
+}
+
+function SaleScreen({ user, onLock, onBack, onComplete }) {
   const isAdmin = user.role === "admin";
-  const [items, setItems] = React.useState(data.catalog);
-  const [categories, setCategories] = React.useState(data.categories);
-  const [cat, setCat] = React.useState(data.categories[0].id);
+  const canDiscount = isAdmin || user.permissions?.['tickets.discount'] === true;
+  const [items, setItems] = React.useState([]);
+  const [categories, setCategories] = React.useState([]);
+  const [cat, setCat] = React.useState(null);
   const [query, setQuery] = React.useState("");
-  const [cart, setCart] = React.useState([]); // {id, name, basePrice, price, qty, type, discount}
-  const [discountFor, setDiscountFor] = React.useState(null); // line id
+  const [cart, setCart] = React.useState([]);
+  const [discountFor, setDiscountFor] = React.useState(null);
   const [payOpen, setPayOpen] = React.useState(false);
   const [cartOpen, setCartOpen] = React.useState(false);
   const [customerName, setCustomerName] = React.useState("");
@@ -24,17 +30,20 @@ function SaleScreen({ user, data, onLock, onBack, onComplete }) {
     catalogApi.get().then((d) => {
       setItems(d.items);
       setCategories(d.categories);
+      if (d.categories.length > 0) setCat(d.categories[0].id);
     }).catch(() => {});
   }, []);
 
-  const visible = items.filter(
+  const visible = cat ? items.filter(
     (p) =>
       (!query
         ? p.cat === cat
         : (p.name + " " + p.cat).toLowerCase().includes(query.toLowerCase()))
-  );
+  ) : [];
 
   const addToCart = (p) => {
+    const promo = p.promotions && p.promotions.length > 0 ? p.promotions[0] : null;
+    const parsed = promo ? parsePromoOff(promo.off) : null;
     setCart((c) => {
       const idx = c.findIndex((x) => x.id === p.id);
       if (idx >= 0) {
@@ -42,17 +51,33 @@ function SaleScreen({ user, data, onLock, onBack, onComplete }) {
         copy[idx] = { ...copy[idx], qty: copy[idx].qty + 1 };
         return copy;
       }
+      const basePrice = p.price;
+      let price = basePrice;
+      let discount = null;
+      if (promo && parsed) {
+        price =
+          parsed.kind === "amount"
+            ? Math.max(0, +(basePrice - parsed.value).toFixed(2))
+            : Math.max(0, +(basePrice * (1 - parsed.value / 100)).toFixed(2));
+        discount = {
+          kind: parsed.kind,
+          value: parsed.value,
+          saved: +(basePrice - price).toFixed(2),
+          promoName: promo.name,
+          promoOff: promo.off,
+        };
+      }
       return [
         ...c,
         {
           id: p.id,
           name: p.name,
-          basePrice: p.price,
-          price: p.price,
+          basePrice,
+          price,
           qty: 1,
           type: p.type,
           duration: p.duration,
-          discount: null,
+          discount,
         },
       ];
     });
@@ -99,8 +124,11 @@ function SaleScreen({ user, data, onLock, onBack, onComplete }) {
       employeeId: user.id,
       lines: cart.map((l) => ({
         itemId: l.id,
-        qty: l.qty,
+        itemType: l.type,
+        itemName: l.name,
+        basePrice: l.basePrice,
         price: l.price,
+        qty: l.qty,
         ...(l.discount ? { discount: l.discount } : {}),
       })),
       payments: [
@@ -141,7 +169,6 @@ function SaleScreen({ user, data, onLock, onBack, onComplete }) {
       />
 
       <div className="sale-body">
-        {/* CATALOG */}
         <section className="catalog">
           <div className="catalog-head">
             <div className="search">
@@ -176,6 +203,7 @@ function SaleScreen({ user, data, onLock, onBack, onComplete }) {
           <div className="catalog-grid">
             {visible.map((p) => {
               const inCart = cart.find((l) => l.id === p.id);
+              const promo = p.promotions && p.promotions.length > 0 ? p.promotions[0] : null;
               return (
                 <button
                   key={p.id}
@@ -190,6 +218,9 @@ function SaleScreen({ user, data, onLock, onBack, onComplete }) {
                       <span className={`prod-type t-${p.type}`}>
                         {p.type === "S" ? "Servicio" : "Producto"}
                       </span>
+                      {promo && (
+                        <span className="prod-promo-badge">{promo.off}</span>
+                      )}
                       {inCart && (
                         <div className="prod-qty-badge">
                           {inCart.qty} <Icons.Check size={11} />
@@ -206,13 +237,28 @@ function SaleScreen({ user, data, onLock, onBack, onComplete }) {
                         </span>
                       )}
                       {p.stock != null && (
-                        <span className={`prod-stock ${p.stock < 8 ? "low" : ""}`}>
+                        <span className={`prod-stock ${p.stock < (p.stockMin || 8) ? "low" : ""}`}>
                           {p.stock} en stock
                         </span>
                       )}
                     </div>
                     <div className="prod-bottom">
-                      <div className="prod-price">${p.price}</div>
+                      <div className="prod-price">
+                        {promo ? (
+                          <>
+                            <s>${p.price}</s>{" "}
+                            <span className="prod-promo-price">
+                              ${parsePromoOff(promo.off)
+                                ? parsePromoOff(promo.off).kind === "amount"
+                                  ? +(p.price - parsePromoOff(promo.off).value).toFixed(2)
+                                  : +(p.price * (1 - parsePromoOff(promo.off).value / 100)).toFixed(2)
+                                : p.price}
+                            </span>
+                          </>
+                        ) : (
+                          <>${p.price}</>
+                        )}
+                      </div>
                       {inCart ? (
                         <div className="prod-qty">{inCart.qty} ×</div>
                       ) : (
@@ -233,7 +279,6 @@ function SaleScreen({ user, data, onLock, onBack, onComplete }) {
           </div>
         </section>
 
-        {/* CART */}
         <aside className={`cart ${cartOpen ? "open" : ""}`}>
           <div className="cart-head" onClick={() => setCartOpen((o) => !o)}>
             <div className="cart-title">
@@ -267,9 +312,11 @@ function SaleScreen({ user, data, onLock, onBack, onComplete }) {
                     {l.discount && (
                       <span className="line-tag">
                         <Icons.Tag size={11} />
-                        {l.discount.kind === "amount"
-                          ? `-$${l.discount.value}`
-                          : `-${l.discount.value}%`}
+                        {l.discount.promoOff ?? (
+                          l.discount.kind === "amount"
+                            ? `-$${l.discount.value}`
+                            : `-${l.discount.value}%`
+                        )}
                       </span>
                     )}
                   </div>
@@ -304,7 +351,7 @@ function SaleScreen({ user, data, onLock, onBack, onComplete }) {
                   </div>
 
                   <div className="line-acts">
-                    {isAdmin && (
+                    {canDiscount && (
                       <button
                         className="line-disc"
                         onClick={() => setDiscountFor(l.id)}
@@ -344,12 +391,6 @@ function SaleScreen({ user, data, onLock, onBack, onComplete }) {
             </div>
           </div>
 
-          {!isAdmin && cart.some((l) => false) && (
-            <div className="cart-note">
-              Solo administradoras pueden modificar precios.
-            </div>
-          )}
-
           <button
             className="btn-pay"
             disabled={cart.length === 0}
@@ -358,9 +399,9 @@ function SaleScreen({ user, data, onLock, onBack, onComplete }) {
             Cobrar ${total.toFixed(2)}
             <Icons.ArrowRight size={16} />
           </button>
-          {!isAdmin && (
+          {!canDiscount && (
             <div className="cart-note">
-              <Icons.Lock size={11} /> Modificar precios requiere admin.
+              <Icons.Lock size={11} /> Descuentos requieren permiso especial.
             </div>
           )}
         </aside>

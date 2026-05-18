@@ -44,7 +44,7 @@ function TopBar({ user, title, onLock, onLogout, onBack, right }) {
   );
 }
 
-// Main menu — large cards. Items visible depend on role.
+// Main menu — large cards. Items visible depend on role or explicit permission.
 function MainMenu({ user, onNav, onLock, onLogout }) {
   const allItems = [
     {
@@ -82,6 +82,7 @@ function MainMenu({ user, onNav, onLock, onLogout }) {
       desc: "Rentabilidad del negocio",
       icon: <Icons.Chart size={28} />,
       roles: ["admin"],
+      permission: "analytics.read",
     },
     {
       id: "staff",
@@ -89,6 +90,7 @@ function MainMenu({ user, onNav, onLock, onLogout }) {
       desc: "Equipo, salarios y asistencia",
       icon: <Icons.Users size={28} />,
       roles: ["admin"],
+      permission: "users.read",
     },
     {
       id: "reports",
@@ -96,6 +98,7 @@ function MainMenu({ user, onNav, onLock, onLogout }) {
       desc: "Stock bajo, descuentos y exports",
       icon: <Icons.Receipt size={28} />,
       roles: ["admin"],
+      permission: "reports.read",
     },
     {
       id: "settings",
@@ -103,9 +106,14 @@ function MainMenu({ user, onNav, onLock, onLogout }) {
       desc: "Catálogo, usuarios, negocio",
       icon: <Icons.Settings size={28} />,
       roles: ["admin"],
+      permission: "products.write",
     },
   ];
-  const items = allItems.filter((i) => i.roles.includes(user.role));
+  const items = allItems.filter((item) => {
+    if (item.roles.includes(user.role)) return true;
+    if (item.permission && user.permissions?.[item.permission] === true) return true;
+    return false;
+  });
 
   const greet = (() => {
     const h = new Date().getHours();

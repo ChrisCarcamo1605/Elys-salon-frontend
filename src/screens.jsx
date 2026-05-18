@@ -10,10 +10,8 @@ import { catalog as catalogApi, inventory as inventoryApi, goals as goalsApi, ca
 //   INVENTORY
 // ============================================================
 
-function Inventory({ user, data, onLock, onBack }) {
-  const [products, setProducts] = useState(
-    data.catalog.filter((p) => p.type === "P")
-  );
+function Inventory({ user, onLock, onBack }) {
+  const [products, setProducts] = useState([]);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("all"); // all | low | out
   const [openEntry, setOpenEntry] = useState(null); // product or "new"
@@ -28,19 +26,19 @@ function Inventory({ user, data, onLock, onBack }) {
   useEffect(() => {
     catalogApi.get().then((result) => {
       setProducts(result.items.filter((p) => p.type === "P"));
-    }).catch(() => {/* keep mock */});
+    }).catch(() => {});
   }, []);
 
   const filtered = products.filter((p) => {
     if (q && !p.name.toLowerCase().includes(q.toLowerCase()) && !p.sku?.toLowerCase().includes(q.toLowerCase())) return false;
-    if (filter === "low" && (p.stock || 0) >= 8) return false;
+    if (filter === "low" && (p.stock || 0) >= (p.stockMin || 8)) return false;
     if (filter === "out" && (p.stock || 0) !== 0) return false;
     return true;
   });
 
   const totalValue = products.reduce((s, p) => s + p.price * (p.stock || 0), 0);
   const totalCost = products.reduce((s, p) => s + (p.cost || 0) * (p.stock || 0), 0);
-  const lowStock = products.filter((p) => (p.stock || 0) > 0 && (p.stock || 0) < 8).length;
+  const lowStock = products.filter((p) => (p.stock || 0) > 0 && (p.stock || 0) < (p.stockMin || 8)).length;
   const outOfStock = products.filter((p) => (p.stock || 0) === 0).length;
 
   const addEntry = (productId, payload) => {
@@ -137,7 +135,7 @@ function Inventory({ user, data, onLock, onBack }) {
             <div>Acciones</div>
           </div>
           {filtered.map((p) => {
-            const low = (p.stock || 0) > 0 && (p.stock || 0) < 8;
+            const low = (p.stock || 0) > 0 && (p.stock || 0) < (p.stockMin || 8);
             const out = (p.stock || 0) === 0;
             return (
               <div className="inv-row" key={p.id}>
@@ -548,9 +546,9 @@ function AdjustModal({ product, onClose, onSave }) {
 //   PROGRESS — multi-goal achievements
 // ============================================================
 
-function Progress({ user, data, onLock, onBack }) {
+function Progress({ user, onLock, onBack }) {
   const [stats, setStats] = useState(user.monthStats || { totalSales: 0, retailSales: 0, servicesDone: 0, newClients: 0 });
-  const [goalsData, setGoalsData] = useState(data.goals);
+  const [goalsData, setGoalsData] = useState([]);
 
   useEffect(() => {
     goalsApi.progress('me').then((result) => {
@@ -730,9 +728,20 @@ function Progress({ user, data, onLock, onBack }) {
 //   TEAM
 // ============================================================
 
-function Team({ user, data, onLock, onBack }) {
-  const team = data.topEmployees.map((t) => ({
-    ...t,
+function Team({ user, onLock, onBack }) {
+  const [topEmployees, setTopEmployees] = useState([]);
+
+  useEffect(() => {
+    staffApi.list().then((items) => {
+      setTopEmployees(items.map((e) => ({
+        name: e.name,
+        ventas: 0,
+        servicios: 0,
+      })));
+    }).catch(() => {});
+  }, []);
+
+  const team = topEmployees.map((t) => ({
     goal: 2000,
     pct: Math.min(100, (t.ventas / 2000) * 100),
     bonus: t.ventas >= 2000 ? 200 : t.ventas >= 1500 ? 100 : t.ventas >= 1000 ? 50 : 0,
@@ -781,23 +790,169 @@ function Team({ user, data, onLock, onBack }) {
 //   SETTINGS — master-detail layout
 // ============================================================
 
-function Settings({ user, data, onLock, onBack }) {
-  const sections = data.settingsSections;
-  const groups = [...new Set(sections.map((s) => s.group))];
-  const [activeId, setActiveId] = useState(sections[0].id);
+const DEFAULT_SECTIONS = [
+  {
+    id: "business", group: "Negocio", label: "Información del negocio",
+    desc: "Nombre, dirección, teléfono y datos de contacto",
+    icon: "Settings", kind: "form",
+    fields: [
+      { key: "name", label: "Nombre del negocio", value: "Ely's Salón de Belleza" },
+      { key: "address", label: "Dirección", value: "Av. Hidalgo 124, Centro, Torreón, Coahuila" },
+      { key: "phone", label: "Teléfono", value: "871 123 4567" },
+      { key: "email", label: "Correo electrónico", value: "contacto@elys-salon.com" },
+      { key: "rfc", label: "RFC", value: "" },
+    ],
+  },
+  {
+    id: "hours", group: "Negocio", label: "Horarios",
+    desc: "Días y horas de operación",
+    icon: "Clock", kind: "hours",
+    schedule: [
+      { day: "Lunes", on: true, open: "09:00", close: "19:00" },
+      { day: "Martes", on: true, open: "09:00", close: "19:00" },
+      { day: "Miércoles", on: true, open: "09:00", close: "19:00" },
+      { day: "Jueves", on: true, open: "09:00", close: "19:00" },
+      { day: "Viernes", on: true, open: "09:00", close: "20:00" },
+      { day: "Sábado", on: true, open: "09:00", close: "17:00" },
+      { day: "Domingo", on: false, open: "10:00", close: "15:00" },
+    ],
+  },
+  {
+    id: "services", group: "Catálogo", label: "Servicios",
+    desc: "Servicios que ofrece el salón",
+    icon: "Sparkle", kind: "catalog-list", filter: "S",
+  },
+  {
+    id: "products", group: "Catálogo", label: "Productos",
+    desc: "Productos que se venden al público",
+    icon: "Box", kind: "catalog-list", filter: "P",
+  },
+  {
+    id: "categories", group: "Catálogo", label: "Categorías",
+    desc: "Organiza los ítems del catálogo por categoría",
+    icon: "Tag", kind: "categories",
+  },
+  {
+    id: "receipt", group: "Ventas", label: "Ticket de venta",
+    desc: "Personaliza el encabezado y pie del ticket",
+    icon: "Receipt", kind: "receipt",
+  },
+  {
+    id: "tax", group: "Ventas", label: "Impuestos",
+    desc: "Configura el IVA y si está incluido en el precio",
+    icon: "Tag", kind: "tax", rate: 16, includedInPrice: true,
+  },
+  {
+    id: "promos", group: "Ventas", label: "Promociones",
+    desc: "Ofertas y descuentos activos",
+    icon: "TrendUp", kind: "promos", promos: [],
+  },
+  {
+    id: "payments", group: "Ventas", label: "Métodos de pago",
+    desc: "Formas de cobro habilitadas",
+    icon: "Card", kind: "payments",
+    methods: [
+      { id: "cash", label: "Efectivo", on: true },
+      { id: "card", label: "Tarjeta", on: true },
+      { id: "transfer", label: "Transferencia", on: true },
+      { id: "voucher", label: "Vale / Monedero", on: false },
+    ],
+  },
+  {
+    id: "users", group: "Equipo", label: "Usuarios",
+    desc: "Cuentas de acceso y PINs",
+    icon: "Users", kind: "users",
+  },
+  {
+    id: "roles", group: "Equipo", label: "Roles y permisos",
+    desc: "Define qué puede hacer cada rol",
+    icon: "Settings", kind: "roles", permissions: [],
+  },
+  {
+    id: "goals", group: "Equipo", label: "Metas y bonos",
+    desc: "Incentivos para el equipo",
+    icon: "Trophy", kind: "goals",
+  },
+  {
+    id: "commissions", group: "Equipo", label: "Comisiones",
+    desc: "Porcentaje de comisión por servicio",
+    icon: "Cash", kind: "commissions",
+    rows: [
+      { name: "Corte", rate: 30 },
+      { name: "Tinte", rate: 25 },
+      { name: "Manicure", rate: 35 },
+      { name: "Pedicure", rate: 35 },
+      { name: "Productos (retail)", rate: 10 },
+    ],
+  },
+  {
+    id: "lock", group: "Seguridad", label: "Bloqueo automático",
+    desc: "Tiempo de inactividad y bloqueo post-cobro",
+    icon: "Lock", kind: "lock-time",
+  },
+  {
+    id: "appearance", group: "Apariencia", label: "Apariencia",
+    desc: "Tema, color de acento y densidad",
+    icon: "Moon", kind: "appearance",
+  },
+  {
+    id: "backup", group: "Sistema", label: "Respaldo",
+    desc: "Copia de seguridad y restauración",
+    icon: "Box", kind: "backup",
+  },
+];
+
+function Settings({ user, onLock, onBack }) {
+  const [sections, setSections] = useState(DEFAULT_SECTIONS);
+  const [activeId, setActiveId] = useState(DEFAULT_SECTIONS[0].id);
   const [navOpen, setNavOpen] = useState(false);
   const [toast, setToast] = useState(null);
+  const groups = [...new Set(sections.map((s) => s.group))];
   const active = sections.find((s) => s.id === activeId);
+  const showToast = (title, sub) => { setToast({ title, sub }); setTimeout(() => setToast(null), 2800); };
 
-  const showToast = (title, sub) => {
-    setToast({ title, sub });
-    setTimeout(() => setToast(null), 2800);
-  };
-
-  const selectSection = (id) => {
-    setActiveId(id);
-    setNavOpen(false);
-  };
+  useEffect(() => {
+    settingsApi.get().then((result) => {
+      setSections((prev) =>
+        prev.map((s) => {
+          if (s.kind === "form") {
+            return {
+              ...s,
+              fields: s.fields.map((f) => {
+                const src = result.business || result;
+                return { ...f, value: src[f.key] ?? f.value };
+              }),
+            };
+          }
+          if (s.kind === "hours" && Array.isArray(result.schedule)) {
+            return { ...s, schedule: result.schedule };
+          }
+          if (s.kind === "tax" && result.tax) {
+            const t = result.tax;
+            return {
+              ...s,
+              rate: t.rate ?? t.iva ?? s.rate,
+              includedInPrice: t.includedInPrice ?? t.included ?? s.includedInPrice,
+            };
+          }
+          if (s.kind === "payments" && result.payments) {
+            const p = result.payments;
+            const methods = Array.isArray(p) ? p : Array.isArray(p.methods) ? p.methods : s.methods;
+            return { ...s, methods };
+          }
+          if (s.kind === "commissions" && result.commissions) {
+            const c = result.commissions;
+            const rows = Array.isArray(c) ? c : Array.isArray(c.rows) ? c.rows : s.rows;
+            return { ...s, rows };
+          }
+          if (s.kind === "promos" && Array.isArray(result.promos)) {
+            return { ...s, promos: result.promos };
+          }
+          return s;
+        })
+      );
+    }).catch(() => {/* keep defaults */});
+  }, []);
 
   return (
     <div className="screen">
@@ -830,7 +985,7 @@ function Settings({ user, data, onLock, onBack }) {
                     <button
                       key={s.id}
                       className={`settings-nav-item ${activeId === s.id ? "active" : ""}`}
-                      onClick={() => selectSection(s.id)}
+                      onClick={() => setActiveId(s.id)}
                     >
                       <div className="settings-nav-ico">
                         <IconComp size={14}/>
@@ -872,7 +1027,7 @@ function Settings({ user, data, onLock, onBack }) {
             </div>
           </div>
 
-          <SettingPanel section={active} data={data} onSave={(name) => showToast("Cambios guardados", name)}/>
+          <SettingPanel section={active} onSave={(name) => showToast("Cambios guardados", name)}/>
         </main>
       </div>
 
@@ -889,18 +1044,18 @@ function Settings({ user, data, onLock, onBack }) {
   );
 }
 
-function SettingPanel({ section, data, onSave }) {
+function SettingPanel({ section, onSave }) {
   const s = section;
   if (s.kind === "form")        return <SettingForm section={s} onSave={onSave}/>;
   if (s.kind === "hours")       return <SettingHours section={s} onSave={onSave}/>;
   if (s.kind === "receipt")     return <SettingReceipt onSave={onSave}/>;
   if (s.kind === "tax")         return <SettingTax section={s} onSave={onSave}/>;
-  if (s.kind === "catalog-list")return <SettingCatalog data={data} filter={s.filter} onSave={onSave}/>;
-  if (s.kind === "categories")  return <SettingCategories data={data} onSave={onSave}/>;
+  if (s.kind === "catalog-list")return <SettingCatalog filter={s.filter} onSave={onSave}/>;
+  if (s.kind === "categories")  return <SettingCategories onSave={onSave}/>;
   if (s.kind === "promos")      return <SettingPromos section={s} onSave={onSave}/>;
-  if (s.kind === "users")       return <SettingUsers data={data} onSave={onSave}/>;
-  if (s.kind === "roles")       return <SettingRoles section={s} data={data} onSave={onSave}/>;
-  if (s.kind === "goals")       return <SettingGoals data={data} onSave={onSave}/>;
+  if (s.kind === "users")       return <SettingUsers onSave={onSave}/>;
+  if (s.kind === "roles")       return <SettingRoles section={s} onSave={onSave}/>;
+  if (s.kind === "goals")       return <SettingGoals onSave={onSave}/>;
   if (s.kind === "commissions") return <SettingCommissions section={s} onSave={onSave}/>;
   if (s.kind === "lock-time")   return <SettingLockTime onSave={onSave}/>;
   if (s.kind === "payments")    return <SettingPayments section={s} onSave={onSave}/>;
@@ -928,18 +1083,23 @@ function SettingForm({ section, onSave }) {
 
   useEffect(() => {
     settingsApi.get().then((result) => {
-      setState((prev) => {
-        const next = { ...prev };
-        section.fields.forEach((f) => {
-          if (result[f.key] !== undefined) next[f.key] = result[f.key];
+      const src = result[section.id];
+      if (src && typeof src === 'object') {
+        setState((prev) => {
+          const next = { ...prev };
+          section.fields.forEach((f) => {
+            if (src[f.key] !== undefined) next[f.key] = src[f.key];
+          });
+          return next;
         });
-        return next;
-      });
-    }).catch(() => {/* keep mock */});
+      }
+    }).catch(() => {});
   }, []);
 
   const handleSave = (label) => {
-    settingsApi.update(state).then(() => onSave(label)).catch((err) => onSave(`Error: ${apiError(err)}`));
+    settingsApi.update({ [section.id]: state })
+      .then(() => onSave(label))
+      .catch((err) => onSave(`Error: ${apiError(err)}`));
   };
 
   return (
@@ -965,7 +1125,7 @@ function SettingForm({ section, onSave }) {
 }
 
 function SettingHours({ section, onSave }) {
-  const [days, setDays] = useState(section.schedule);
+  const [days, setDays] = useState(Array.isArray(section.schedule) ? section.schedule : []);
   const toggle = (i) => setDays((d) => d.map((x, j) => j === i ? { ...x, on: !x.on } : x));
   const setTime = (i, key, v) =>
     setDays((d) => d.map((x, j) => j === i ? { ...x, [key]: v } : x));
@@ -1021,6 +1181,21 @@ function SettingReceipt({ onSave }) {
   const [footer, setFooter] = useState("¡Gracias por tu visita! Síguenos en @elys.salon");
   const [showLogo, setShowLogo] = useState(true);
   const [showAddress, setShowAddress] = useState(true);
+  const [address, setAddress] = useState("");
+
+  useEffect(() => {
+    settingsApi.get().then((result) => {
+      const r = result.receipt;
+      if (r && typeof r === 'object') {
+        if (r.header !== undefined) setHeader(r.header);
+        if (r.footer !== undefined) setFooter(r.footer);
+        if (r.showLogo !== undefined) setShowLogo(r.showLogo);
+        if (r.showAddress !== undefined) setShowAddress(r.showAddress);
+      }
+      const b = result.business;
+      if (b?.address) setAddress(b.address);
+    }).catch(() => {});
+  }, []);
 
   const handleSave = (label) => {
     settingsApi.update({ receipt: { header, footer, showLogo, showAddress } })
@@ -1082,7 +1257,7 @@ function SettingReceipt({ onSave }) {
           )}
           <div className="ticket-h">{header}</div>
           {showAddress && (
-            <div className="ticket-addr">Av. Hidalgo 124, Torreón</div>
+            <div className="ticket-addr">{address}</div>
           )}
           <div className="ticket-sep">— — — — — — — — — — —</div>
           <div className="ticket-line"><span>1× Tinte raíz</span><span>$35.00</span></div>
@@ -1141,13 +1316,19 @@ function SettingTax({ section, onSave }) {
   );
 }
 
-function SettingCatalog({ data, filter, onSave }) {
-  const [items, setItems] = useState(
-    data.catalog.filter((c) => c.type === filter)
-  );
+function SettingCatalog({ filter, onSave }) {
+  const [items, setItems] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState(null); // item or "new"
   const [confirm, setConfirm] = useState(null);
+
+  useEffect(() => {
+    catalogApi.get().then((result) => {
+      setItems(result.items.filter((c) => c.type === filter));
+      setCategories(result.categories);
+    }).catch(() => {});
+  }, [filter]);
 
   useEffect(() => {
     catalogApi.get().then((result) => {
@@ -1192,7 +1373,7 @@ function SettingCatalog({ data, filter, onSave }) {
 
   const newItem = () => ({
     id: `${filter.toLowerCase()}_${Date.now()}`,
-    cat: data.categories[0].id,
+    cat: categories[0]?.id ?? '',
     type: filter,
     name: "",
     price: 0,
@@ -1226,7 +1407,7 @@ function SettingCatalog({ data, filter, onSave }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 600, fontSize: 14 }}>{p.name}</div>
               <div style={{ fontSize: 12, color: "var(--ink-dim)" }}>
-                {p.brand || data.categories.find((c) => c.id === p.cat)?.label}
+                {p.brand || categories.find((c) => c.id === p.cat)?.label}
                 {" · "}{p.duration || `${p.stock} en stock`}
               </div>
             </div>
@@ -1254,7 +1435,7 @@ function SettingCatalog({ data, filter, onSave }) {
       {editing && (
         <CatalogItemModal
           item={editing}
-          categories={data.categories}
+          categories={categories}
           onClose={() => setEditing(null)}
           onSave={handleSave}
         />
@@ -1428,8 +1609,12 @@ function CatalogItemModal({ item, categories, onClose, onSave }) {
   );
 }
 
-function SettingCategories({ data, onSave }) {
-  const [cats, setCats] = useState(data.categories);
+function SettingCategories({ onSave }) {
+  const [cats, setCats] = useState([]);
+
+  useEffect(() => {
+    categoriesApi.list().then((items) => setCats(items)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     categoriesApi.list().then((items) => {
@@ -1474,12 +1659,29 @@ function SettingCategories({ data, onSave }) {
 }
 
 function SettingPromos({ section, onSave }) {
-  const [promos, setPromos] = useState(section.promos);
+  const [promos, setPromos] = useState(Array.isArray(section.promos) ? section.promos : []);
+  const [catalogItems, setCatalogItems] = useState([]);
+  const [editing, setEditing] = useState(null);
+
+  const today = new Date().toISOString().slice(0, 10);
 
   useEffect(() => {
     promotionsApi.list().then((items) => {
-      setPromos(items.map((p) => ({ ...p, on: p.active })));
-    }).catch(() => {/* keep mock */});
+      const mapped = items.map((p) => {
+        const expired = p.rule?.expiresAt && p.rule.expiresAt < today;
+        return { ...p, on: p.active && !expired };
+      });
+      setPromos(mapped);
+      // auto-deactivate expired promos
+      items.forEach((p) => {
+        if (p.active && p.rule?.expiresAt && p.rule.expiresAt < today) {
+          promotionsApi.update(p.id, { active: false }).catch(() => {});
+        }
+      });
+    }).catch(() => {});
+    catalogApi.get().then((d) => {
+      setCatalogItems(d.items);
+    }).catch(() => {});
   }, []);
 
   const toggle = (i) => {
@@ -1487,31 +1689,167 @@ function SettingPromos({ section, onSave }) {
     const newActive = !promo.on;
     setPromos((ps) => ps.map((p, j) => j === i ? { ...p, on: newActive } : p));
     promotionsApi.update(promo.id, { active: newActive }).catch((err) => {
-      // revert on error
       setPromos((ps) => ps.map((p, j) => j === i ? { ...p, on: !newActive } : p));
       onSave(`Error: ${apiError(err)}`);
     });
   };
 
+  const startCreate = () => {
+    setEditing({ name: '', desc: '', off: '', itemIds: [], active: true, expiresAt: '', maxUses: '' });
+  };
+
+  const startEdit = (i) => {
+    const p = promos[i];
+    setEditing({
+      ...p,
+      desc: p.desc ?? p.description ?? '',
+      expiresAt: p.rule?.expiresAt ?? '',
+      maxUses: p.rule?.maxUses ?? '',
+    });
+  };
+
+  const saveEdit = () => {
+    if (!editing.name || !editing.off) return;
+    const rule = { ...(editing.rule ?? {}) };
+    if (editing.expiresAt) rule.expiresAt = editing.expiresAt;
+    else delete rule.expiresAt;
+    if (editing.maxUses) rule.maxUses = Number(editing.maxUses);
+    else delete rule.maxUses;
+    const body = {
+      name: editing.name,
+      description: editing.desc,
+      off: editing.off,
+      itemIds: editing.itemIds,
+      active: editing.active ?? true,
+      rule: Object.keys(rule).length > 0 ? rule : undefined,
+    };
+    if (editing.id) {
+      promotionsApi.update(editing.id, body).then((updated) => {
+        setPromos((ps) => ps.map((p) => p.id === updated.id ? { ...updated, on: updated.active } : p));
+        setEditing(null);
+      }).catch((err) => onSave(`Error: ${apiError(err)}`));
+    } else {
+      promotionsApi.create(body).then((created) => {
+        setPromos((ps) => [...ps, { ...created, on: created.active }]);
+        setEditing(null);
+      }).catch((err) => onSave(`Error: ${apiError(err)}`));
+    }
+  };
+
+  const toggleItem = (itemId) => {
+    setEditing((e) => {
+      const has = (e.itemIds ?? []).includes(itemId);
+      return { ...e, itemIds: has ? e.itemIds.filter((id) => id !== itemId) : [...(e.itemIds ?? []), itemId] };
+    });
+  };
+
+  if (editing) {
+    const selIds = editing.itemIds ?? [];
+    return (
+      <div className="set-card">
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Nombre</label>
+          <input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder="Ej: Bienvenida 15%" style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 14 }} />
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Descripción</label>
+          <input value={editing.desc} onChange={(e) => setEditing({ ...editing, desc: e.target.value })} placeholder="Descripción de la promoción" style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 14 }} />
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Descuento (ej: "15%", "$50")</label>
+          <input value={editing.off} onChange={(e) => setEditing({ ...editing, off: e.target.value })} placeholder="15%" style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 14 }} />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Fecha de caducidad</label>
+            <input
+              type="date"
+              value={editing.expiresAt ?? ''}
+              min={today}
+              onChange={(e) => setEditing({ ...editing, expiresAt: e.target.value })}
+              style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 14 }}
+            />
+            <div style={{ fontSize: 11, color: 'var(--ink-dim)', marginTop: 3 }}>Dejar vacío = sin fecha límite</div>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Límite de usos</label>
+            <input
+              type="number"
+              min="0"
+              placeholder="Sin límite"
+              value={editing.maxUses ?? ''}
+              onChange={(e) => setEditing({ ...editing, maxUses: e.target.value })}
+              style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 14 }}
+            />
+            <div style={{ fontSize: 11, color: 'var(--ink-dim)', marginTop: 3 }}>Ventas máximas con esta promo</div>
+          </div>
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Productos y servicios incluidos</label>
+          <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, padding: 8 }}>
+            {catalogItems.map((it) => (
+              <label key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', cursor: 'pointer', fontSize: 13 }}>
+                <input type="checkbox" checked={selIds.includes(it.id)} onChange={() => toggleItem(it.id)} />
+                <span className={`pill p-${it.type}`} style={{ fontSize: 9 }}>{it.type === 'S' ? 'S' : 'P'}</span>
+                <span>{it.name}</span>
+                <span style={{ marginLeft: 'auto', color: 'var(--ink-dim)', fontSize: 12 }}>${it.price}</span>
+              </label>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--ink-dim)', marginTop: 4 }}>{selIds.length} seleccionado{selIds.length !== 1 ? 's' : ''}</div>
+        </div>
+        <div className="modal-foot" style={{ padding: 0 }}>
+          <button className="btn-ghost" onClick={() => setEditing(null)}>Cancelar</button>
+          <button className="btn-primary" onClick={saveEdit} disabled={!editing.name || !editing.off}>
+            <Icons.Check size={14} /> {editing.id ? 'Guardar' : 'Crear'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="set-card">
       <div className="promo-list">
-        {promos.map((p, i) => (
-          <div className={`promo-row ${p.on ? "" : "off"}`} key={p.name}>
-            <div className="promo-off">{p.off}</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600 }}>{p.name}</div>
-              <div style={{ fontSize: 12, color: "var(--ink-dim)" }}>{p.desc}</div>
+        {promos.map((p, i) => {
+          const expired = p.rule?.expiresAt && p.rule.expiresAt < today;
+          const expiresDate = p.rule?.expiresAt
+            ? new Date(p.rule.expiresAt + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })
+            : null;
+          return (
+            <div className={`promo-row ${p.on ? "" : "off"}`} key={p.id || p.name}>
+              <div className="promo-off">{p.off}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600 }}>{p.name}</div>
+                <div style={{ fontSize: 12, color: "var(--ink-dim)" }}>{p.desc}</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                  {(p.itemIds?.length > 0) && (
+                    <span style={{ fontSize: 10, background: 'var(--surface-raised)', padding: '1px 6px', borderRadius: 4, color: 'var(--ink-dim)' }}>
+                      {p.itemIds.length} ítem{p.itemIds.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {expiresDate && (
+                    <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: expired ? '#fef2f2' : 'var(--surface-raised)', color: expired ? '#dc2626' : 'var(--ink-dim)', fontWeight: expired ? 700 : 400 }}>
+                      {expired ? 'EXPIRADA' : `Vence ${expiresDate}`}
+                    </span>
+                  )}
+                  {p.rule?.maxUses && (
+                    <span style={{ fontSize: 10, background: 'var(--surface-raised)', padding: '1px 6px', borderRadius: 4, color: 'var(--ink-dim)' }}>
+                      Máx. {p.rule.maxUses} usos
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button className={`hours-toggle ${p.on ? "on" : ""}`} onClick={() => toggle(i)}>
+                <span/>
+              </button>
+              <button className="btn-ghost btn-sm" onClick={() => startEdit(i)}>Editar</button>
             </div>
-            <button className={`hours-toggle ${p.on ? "on" : ""}`} onClick={() => toggle(i)}>
-              <span/>
-            </button>
-            <button className="btn-ghost btn-sm">Editar</button>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <div style={{ marginTop: 14 }}>
-        <button className="btn-primary">
+        <button className="btn-primary" onClick={startCreate}>
           <Icons.Plus size={14}/> Nueva promoción
         </button>
       </div>
@@ -1519,20 +1857,14 @@ function SettingPromos({ section, onSave }) {
   );
 }
 
-function SettingUsers({ data, onSave }) {
-  const [users, setUsers] = useState(data.users);
+function SettingUsers({ onSave }) {
+  const [users, setUsers] = useState([]);
 
   useEffect(() => {
     staffApi.list().then((items) => {
       setUsers(items);
-    }).catch(() => {/* keep mock */});
+    }).catch(() => {});
   }, []);
-
-  const handlePinSave = (id, newPin) => {
-    staffApi.update(id, { pin: newPin })
-      .then(() => onSave("PIN actualizado"))
-      .catch((err) => onSave(`Error: ${apiError(err)}`));
-  };
 
   return (
     <div className="set-card">
@@ -1560,26 +1892,27 @@ function SettingUsers({ data, onSave }) {
   );
 }
 
-function SettingRoles({ section, data, onSave }) {
-  const [perms, setPerms] = useState(section.permissions);
-  const [selectedUserId, setSelectedUserId] = useState(data.users[0]?.id);
-  // userOverrides: { [userId]: { role: "admin"|"empleada", perms: { [perm]: boolean } } }
-  const [userOverrides, setUserOverrides] = useState(() => {
-    const o = {};
-    data.users.forEach((u) => {
-      o[u.id] = { role: u.role, perms: {} };
-    });
-    return o;
-  });
-  const [tab, setTab] = useState("byUser"); // "byUser" | "matrix"
+function SettingRoles({ section, onSave }) {
+  const [tab, setTab] = useState("byUser");
+  const [perms, setPerms] = useState(Array.isArray(section.permissions) ? section.permissions : []);
+  const [users, setUsers] = useState([]);
+  const [selectedUserId, setSelectedUserId] = useState(null);
+  const [userOverrides, setUserOverrides] = useState({});
 
   useEffect(() => {
+    staffApi.list().then((items) => {
+      setUsers(items);
+      if (items.length > 0 && !selectedUserId) setSelectedUserId(items[0].id);
+      const o = {};
+      items.forEach((u) => { o[u.id] = { role: u.role, perms: {} }; });
+      setUserOverrides(o);
+    }).catch(() => {});
     permissionsApi.matrix().then((matrix) => {
       setPerms(matrix);
-    }).catch(() => {/* keep mock */});
+    }).catch(() => {});
   }, []);
 
-  const selectedUser = data.users.find((u) => u.id === selectedUserId);
+  const selectedUser = users.find((u) => u.id === selectedUserId);
   const userState = userOverrides[selectedUserId] || { role: "empleada", perms: {} };
 
   // Effective permission = override if set, else role default from matrix
@@ -1647,7 +1980,7 @@ function SettingRoles({ section, data, onSave }) {
             Selecciona una usuaria
           </div>
           <div className="user-picker">
-            {data.users.map((u) => (
+            {users.map((u) => (
               <button
                 key={u.id}
                 className={`user-pick ${selectedUserId === u.id ? "active" : ""}`}
@@ -1782,15 +2115,15 @@ function SettingRoles({ section, data, onSave }) {
   );
 }
 
-function SettingGoals({ data, onSave }) {
-  const [goals, setGoals] = useState(data.goals);
+function SettingGoals({ onSave }) {
+  const [goals, setGoals] = useState([]);
   const [editing, setEditing] = useState(null);
   const [confirm, setConfirm] = useState(null);
 
   useEffect(() => {
     goalsApi.list().then((items) => {
       setGoals(items);
-    }).catch(() => {/* keep mock */});
+    }).catch(() => {});
   }, []);
 
   const handleSave = (g) => {
@@ -2102,7 +2435,7 @@ function GoalModal({ goal, onClose, onSave }) {
 }
 
 function SettingCommissions({ section, onSave }) {
-  const [rows, setRows] = useState(section.rows);
+  const [rows, setRows] = useState(Array.isArray(section.rows) ? section.rows : []);
 
   const handleSave = (label) => {
     settingsApi.update({ commissions: rows })
@@ -2135,13 +2468,28 @@ function SettingCommissions({ section, onSave }) {
 }
 
 function SettingLockTime({ onSave }) {
-  const [val, setVal] = useState(120);
+  const [timeoutSec, setTimeoutSec] = useState(120);
   const [lockAfterSale, setLockAfterSale] = useState(true);
   const [lockOnSwitch, setLockOnSwitch] = useState(true);
 
+  useEffect(() => {
+    settingsApi.get().then((result) => {
+      const lock = result.lock;
+      if (lock && typeof lock === 'object') {
+        if (lock.timeoutSec !== undefined) setTimeoutSec(lock.timeoutSec);
+        if (lock.lockAfterSale !== undefined) setLockAfterSale(lock.lockAfterSale);
+        if (lock.lockOnSwitch !== undefined) setLockOnSwitch(lock.lockOnSwitch);
+      }
+    }).catch(() => {});
+  }, []);
+
   const handleSave = (label) => {
-    settingsApi.update({ lockTimeoutSec: val, lockAfterSale })
-      .then(() => onSave(label))
+    const lockSettings = { timeoutSec, lockAfterSale, lockOnSwitch };
+    settingsApi.update({ lock: lockSettings })
+      .then(() => {
+        window.dispatchEvent(new CustomEvent('elys:settings-updated', { detail: { lock: lockSettings } }));
+        onSave(label);
+      })
       .catch((err) => onSave(`Error: ${apiError(err)}`));
   };
 
@@ -2154,14 +2502,14 @@ function SettingLockTime({ onSave }) {
           min="30"
           max="600"
           step="30"
-          value={val}
-          onChange={(e) => setVal(+e.target.value)}
+          value={timeoutSec}
+          onChange={(e) => setTimeoutSec(+e.target.value)}
           className="form-slider"
         />
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--ink-dim)" }}>
           <span>30s</span>
           <span style={{ color: "var(--magenta)", fontWeight: 700 }}>
-            {val < 60 ? `${val}s` : `${Math.round(val/60)} min ${val%60 ? `${val%60}s` : ""}`}
+            {timeoutSec < 60 ? `${timeoutSec}s` : `${Math.floor(timeoutSec/60)} min${timeoutSec%60 ? ` ${timeoutSec%60}s` : ""}`}
           </span>
           <span>10 min</span>
         </div>
@@ -2182,7 +2530,7 @@ function SettingLockTime({ onSave }) {
 }
 
 function SettingPayments({ section, onSave }) {
-  const [methods, setMethods] = useState(section.methods);
+  const [methods, setMethods] = useState(Array.isArray(section.methods) ? section.methods : []);
   const toggle = (i) => setMethods((m) => m.map((x, j) => j === i ? { ...x, on: !x.on } : x));
 
   const handleSave = (label) => {

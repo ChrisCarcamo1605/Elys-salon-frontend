@@ -2,14 +2,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTweaks, TweaksPanel, TweakSection, TweakToggle, TweakColor, TweakRadio, TweakSlider, TweakButton } from './tweaks-panel.jsx';
 import { Icons } from './icons.jsx';
 import { LockScreen } from './lockscreen.jsx';
-import { setToken, clearToken, auth } from './api.js';
+import { setToken, clearToken, auth, settings as settingsApi } from './api.js';
 import { TopBar, MainMenu } from './menu.jsx';
 import { SaleScreen } from './sales.jsx';
 import { Analytics } from './analytics.jsx';
 import { Staff, TimeClock } from './staff.jsx';
 import { Reports } from './reports.jsx';
 import { Inventory, Progress, Team, Settings } from './screens.jsx';
-import data from './data.js';
+
 
 // Cookie helpers — persist appearance settings across sessions.
 const APP_COOKIE = "elys_prefs";
@@ -30,7 +30,9 @@ const TWEAK_DEFAULTS = {
   "darkMode": false,
   "accent": "#de0fab",
   "density": "comfortable",
-  "lockTimeoutSec": 120
+  "lockTimeoutSec": 120,
+  "lockAfterSale": true,
+  "lockOnSwitch": true,
 };
 
 function App() {
@@ -51,6 +53,24 @@ function App() {
   const [lockReason, setLockReason] = useState("");
   const [toast, setToast] = useState(null);
   const inactivityRef = useRef(null);
+  const setTweakRef = useRef(setTweak);
+  setTweakRef.current = setTweak;
+
+  // Load persisted lock settings from API and sync on updates
+  useEffect(() => {
+    const applyLock = (lock) => {
+      if (!lock || typeof lock !== 'object') return;
+      const updates = {};
+      if (lock.timeoutSec !== undefined) updates.lockTimeoutSec = lock.timeoutSec;
+      if (lock.lockAfterSale !== undefined) updates.lockAfterSale = lock.lockAfterSale;
+      if (lock.lockOnSwitch !== undefined) updates.lockOnSwitch = lock.lockOnSwitch;
+      if (Object.keys(updates).length > 0) setTweakRef.current(updates);
+    };
+    settingsApi.get().then((r) => applyLock(r.lock)).catch(() => {});
+    const handler = (e) => applyLock(e.detail?.lock);
+    window.addEventListener('elys:settings-updated', handler);
+    return () => window.removeEventListener('elys:settings-updated', handler);
+  }, []);
 
   // Apply dark mode + accent + density
   useEffect(() => {
@@ -96,12 +116,13 @@ function App() {
   };
 
   const completeSale = ({ total, items }) => {
+    const willLock = t.lockAfterSale !== false;
     setToast({
       title: "Venta cobrada",
-      sub: `${items} ${items === 1 ? "ítem" : "ítems"} · $${total.toFixed(2)} · Terminal bloqueada`,
+      sub: `${items} ${items === 1 ? "ítem" : "ítems"} · $${total.toFixed(2)}${willLock ? " · Terminal bloqueada" : ""}`,
     });
     setTimeout(() => setToast(null), 3800);
-    lock("Bloqueo automático tras cobro");
+    if (willLock) lock("Bloqueo automático tras cobro");
   };
 
   const TweaksUI = (
@@ -147,7 +168,6 @@ function App() {
     return (
       <>
         <LockScreen
-          users={data.users}
           onUnlock={({ user, token }) => {
             setToken(token);
             setUser(user);
@@ -179,7 +199,6 @@ function App() {
       content = (
         <SaleScreen
           user={user}
-          data={data}
           onLock={lockBtn}
           onBack={() => setRoute("menu")}
           onComplete={completeSale}
@@ -187,25 +206,25 @@ function App() {
       );
       break;
     case "analytics":
-      content = <Analytics user={user} data={data} onLock={lockBtn} onBack={() => setRoute("menu")}/>;
+      content = <Analytics user={user} onLock={lockBtn} onBack={() => setRoute("menu")}/>;
       break;
     case "inventory":
-      content = <Inventory user={user} data={data} onLock={lockBtn} onBack={() => setRoute("menu")}/>;
+      content = <Inventory user={user} onLock={lockBtn} onBack={() => setRoute("menu")}/>;
       break;
     case "progress":
-      content = <Progress user={user} data={data} onLock={lockBtn} onBack={() => setRoute("menu")}/>;
+      content = <Progress user={user} onLock={lockBtn} onBack={() => setRoute("menu")}/>;
       break;
     case "staff":
-      content = <Staff user={user} data={data} onLock={lockBtn} onBack={() => setRoute("menu")}/>;
+      content = <Staff user={user} onLock={lockBtn} onBack={() => setRoute("menu")}/>;
       break;
     case "reports":
-      content = <Reports user={user} data={data} onLock={lockBtn} onBack={() => setRoute("menu")} onNav={setRoute}/>;
+      content = <Reports user={user} onLock={lockBtn} onBack={() => setRoute("menu")} onNav={setRoute}/>;
       break;
     case "timeclock":
-      content = <TimeClock user={user} data={data} onLock={lockBtn} onBack={() => setRoute("menu")}/>;
+      content = <TimeClock user={user} onLock={lockBtn} onBack={() => setRoute("menu")}/>;
       break;
     case "settings":
-      content = <Settings user={user} data={data} onLock={lockBtn} onBack={() => setRoute("menu")}/>;
+      content = <Settings user={user} onLock={lockBtn} onBack={() => setRoute("menu")}/>;
       break;
     default:
       content = (

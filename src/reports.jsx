@@ -2,7 +2,7 @@
 import React from 'react';
 import { Icons } from './icons.jsx';
 import { TopBar } from './menu.jsx';
-import { alerts as alertsApi, promotions as promotionsApi, reports as reportsApi, downloadBlob, apiError } from './api.js';
+import { alerts as alertsApi, promotions as promotionsApi, reports as reportsApi, downloadBlob, apiError, analytics as analyticsApi, catalog as catalogApi, staff as staffApi, timeclock as timeclockApi } from './api.js';
 
 // ============================================================
 //   EXPORT UTILITIES
@@ -337,7 +337,7 @@ const exportUtils = (function () {
 //   REPORTS & ALERTS SCREEN
 // ============================================================
 
-function Reports({ user, data, onLock, onBack, onNav }) {
+function Reports({ user, onLock, onBack, onNav }) {
   const [tab, setTab] = React.useState("alerts");
   const [toast, setToast] = React.useState(null);
 
@@ -376,8 +376,8 @@ function Reports({ user, data, onLock, onBack, onNav }) {
           })}
         </div>
 
-        {tab === "alerts"  && <AlertsPanel data={data} onNav={onNav} onAction={showToast}/>}
-        {tab === "reports" && <ReportsPanel data={data} onAction={showToast}/>}
+        {tab === "alerts"  && <AlertsPanel onNav={onNav} onAction={showToast}/>}
+        {tab === "reports" && <ReportsPanel onAction={showToast}/>}
       </div>
 
       {toast && (
@@ -393,30 +393,38 @@ function Reports({ user, data, onLock, onBack, onNav }) {
   );
 }
 
-function AlertsPanel({ data, onNav, onAction }) {
-  const products = data.catalog.filter((p) => p.type === "P");
-
-  // Stock alert config per product (in-memory state)
-  const [stockAlerts, setStockAlerts] = React.useState(() =>
-    products.reduce((acc, p) => {
-      acc[p.id] = {
-        enabled: p.alertEnabled ?? false,
-        min: p.stockMin ?? data.stockAlertConfig.defaultMinStock,
-      };
-      return acc;
-    }, {})
-  );
-  const [defaultMin, setDefaultMin] = React.useState(data.stockAlertConfig.defaultMinStock);
+function AlertsPanel({ onNav, onAction }) {
+  const [products, setProducts] = React.useState([]);
+  const [stockAlerts, setStockAlerts] = React.useState({});
+  const [defaultMin, setDefaultMin] = React.useState(8);
   const [editingStockFor, setEditingStockFor] = React.useState(null);
+  const [promos, setPromos] = React.useState([]);
+  const [promoStates, setPromoStates] = React.useState([]);
 
-  // Active low-stock alerts: products where alerts are enabled AND stock <= min
+  React.useEffect(() => {
+    catalogApi.get().then((result) => {
+      const prods = result.items.filter((p) => p.type === "P");
+      setProducts(prods);
+      const alerts = {};
+      prods.forEach((p) => {
+        alerts[p.id] = {
+          enabled: p.alertEnabled ?? false,
+          min: p.stockMin ?? defaultMin,
+        };
+      });
+      setStockAlerts(alerts);
+    }).catch(() => {});
+    promotionsApi.list().then((items) => {
+      setPromos(items);
+      setPromoStates(items.map((p) => p.active));
+}).catch(() => {});
+  }, []);
+
   const lowStockAlerts = products.filter(
     (p) => stockAlerts[p.id]?.enabled && (p.stock || 0) <= stockAlerts[p.id].min
   );
   const outOfStock = lowStockAlerts.filter((p) => p.stock === 0);
 
-  const promos = (data.settingsSections.find((s) => s.id === "promos")?.promos) || [];
-  const [promoStates, setPromoStates] = React.useState(promos.map((p) => p.on));
   const togglePromo = (i) => {
     const newActive = !promoStates[i];
     setPromoStates((arr) => arr.map((v, j) => j === i ? newActive : v));
@@ -437,26 +445,7 @@ function AlertsPanel({ data, onNav, onAction }) {
   ];
 
   // Slow movers with editable suggested offer
-  const [slowMovers, setSlowMovers] = React.useState([
-    {
-      id: "sm1",
-      productId: "r7",
-      name: "Lima profesional",
-      stock: 30, lastSold: "hace 18 días",
-      basePrice: 4,
-      suggested: { kind: "percent", value: 25 },
-      live: false,
-    },
-    {
-      id: "sm2",
-      productId: "r8",
-      name: "Crema de manos",
-      stock: 18, lastSold: "hace 11 días",
-      basePrice: 8,
-      suggested: { kind: "percent", value: 20 },
-      live: false,
-    },
-  ]);
+  const [slowMovers, setSlowMovers] = React.useState([]);
   const [editingOffer, setEditingOffer] = React.useState(null);
 
   // Load alerts from API on mount; fall back to mock data silently on error
@@ -477,7 +466,11 @@ function AlertsPanel({ data, onNav, onAction }) {
         });
       }
       if (resp.slowMovers && Array.isArray(resp.slowMovers) && resp.slowMovers.length > 0) {
-        setSlowMovers(resp.slowMovers);
+        setSlowMovers(resp.slowMovers.map((s) => ({
+          ...s,
+          basePrice: s.basePrice != null ? Number(s.basePrice) : 0,
+          suggested: s.suggested || { kind: "percent", value: 15 },
+        })));
       }
       if (resp.promotions && Array.isArray(resp.promotions) && resp.promotions.length > 0) {
         // Sync promo active state; API promotions array has { id, active, ... }
@@ -493,10 +486,19 @@ function AlertsPanel({ data, onNav, onAction }) {
       ? Math.max(0, base - +value)
       : +(base * (1 - +value / 100)).toFixed(2);
 
-  const setLowStockEnabled = (id, on) =>
+  const setLowStockEnabled = (id, on) => {
     setStockAlerts((s) => ({ ...s, [id]: { ...s[id], enabled: on } }));
-  const setLowStockMin = (id, min) =>
+    alertsApi.updateProductStockAlert(id, { alertEnabled: on }).catch((err) => {
+      setStockAlerts((s) => ({ ...s, [id]: { ...s[id], enabled: !on } }));
+      onAction({ title: "Error al actualizar alerta", sub: apiError(err) });
+    });
+  };
+  const setLowStockMin = (id, min) => {
     setStockAlerts((s) => ({ ...s, [id]: { ...s[id], min: +min || 0 } }));
+    alertsApi.updateProductStockAlert(id, { stockMin: +min || 0 }).catch((err) => {
+      onAction({ title: "Error al guardar stock mínimo", sub: apiError(err) });
+    });
+  };
   const setSlowMover = (id, patch) =>
     setSlowMovers((arr) => arr.map((s) => s.id === id ? { ...s, ...patch } : s));
 
@@ -744,8 +746,9 @@ function AlertsPanel({ data, onNav, onAction }) {
                 <Icons.Check size={20}/> Todo el catálogo está en movimiento.
               </div>
             ) : slowMovers.map((s) => {
-              const offerPrice = calcOfferPrice(s.basePrice, s.suggested.kind, s.suggested.value);
-              const saving = (s.basePrice - offerPrice).toFixed(2);
+              const basePrice = s.basePrice != null ? Number(s.basePrice) : 0;
+              const offerPrice = calcOfferPrice(basePrice, s.suggested.kind, s.suggested.value);
+              const saving = (basePrice - offerPrice).toFixed(2);
               return (
                 <div className={`alert-row offer-row ${s.live ? "live" : ""}`} key={s.id}>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -758,7 +761,7 @@ function AlertsPanel({ data, onNav, onAction }) {
                   <div className="offer-preview">
                     <div className="offer-label">Oferta sugerida</div>
                     <div className="offer-prices">
-                      <span className="offer-from">${s.basePrice}</span>
+                      <span className="offer-from">${basePrice}</span>
                       <Icons.ArrowRight size={11}/>
                       <span className="offer-to">${offerPrice.toFixed(2)}</span>
                       <span className="offer-tag">
@@ -847,10 +850,11 @@ function AlertsPanel({ data, onNav, onAction }) {
 function OfferEditModal({ slow, onClose, onSave }) {
   const [kind, setKind] = React.useState(slow.suggested.kind);
   const [value, setValue] = React.useState(slow.suggested.value);
+  const basePrice = slow.basePrice != null ? Number(slow.basePrice) : 0;
   const preview =
     kind === "amount"
-      ? Math.max(0, slow.basePrice - +value)
-      : +(slow.basePrice * (1 - +value / 100)).toFixed(2);
+      ? Math.max(0, basePrice - +value)
+      : +(basePrice * (1 - +value / 100)).toFixed(2);
 
   const quick = kind === "amount" ? [1, 2, 5, 10] : [10, 20, 30, 50];
 
@@ -862,7 +866,7 @@ function OfferEditModal({ slow, onClose, onSave }) {
             <div className="modal-eyebrow">Ajustar oferta</div>
             <div className="modal-title">{slow.name}</div>
             <div className="modal-sub">
-              Precio base ${slow.basePrice} · {slow.stock} en stock · {slow.lastSold}
+              Precio base ${basePrice} · {slow.stock} en stock · {slow.lastSold}
             </div>
           </div>
           <button className="iconbtn" onClick={onClose}>
@@ -908,7 +912,7 @@ function OfferEditModal({ slow, onClose, onSave }) {
         <div className="disc-preview">
           <div>
             <div className="dp-label">Precio normal</div>
-            <div className="dp-old">${slow.basePrice}</div>
+            <div className="dp-old">${basePrice}</div>
           </div>
           <Icons.ArrowRight size={18}/>
           <div>
@@ -916,7 +920,7 @@ function OfferEditModal({ slow, onClose, onSave }) {
             <div className="dp-new">${preview.toFixed(2)}</div>
           </div>
           <div className="dp-saved">
-            Ahorra <b>${(slow.basePrice - preview).toFixed(2)}</b>
+            Ahorra <b>${(basePrice - preview).toFixed(2)}</b>
           </div>
         </div>
 
@@ -934,8 +938,31 @@ function OfferEditModal({ slow, onClose, onSave }) {
   );
 }
 
-function ReportsPanel({ data, onAction }) {
+function ReportsPanel({ onAction }) {
   const fmtToday = new Date().toISOString().slice(0, 10);
+  const [apiData, setApiData] = React.useState({ salesByDay: [], catalog: [], employees: [], categoryRevenue: [], historicTimeEntries: [], topEmployees: [] });
+
+  React.useEffect(() => {
+    Promise.allSettled([
+      analyticsApi.salesByDay('30d'),
+      catalogApi.get(),
+      staffApi.list(),
+      analyticsApi.categoryRevenue('30d'),
+      timeclockApi.history({ range: 'month' }),
+      analyticsApi.topEmployees('30d'),
+    ]).then(([salesRes, catalogRes, staffRes, catRes, timeRes, topRes]) => {
+      setApiData({
+        salesByDay: salesRes.status === 'fulfilled' ? (salesRes.value.items ?? []) : [],
+        catalog: catalogRes.status === 'fulfilled' ? (catalogRes.value.items ?? []) : [],
+        employees: staffRes.status === 'fulfilled' ? (staffRes.value ?? []) : [],
+        categoryRevenue: catRes.status === 'fulfilled' ? (catRes.value.items ?? []) : [],
+        historicTimeEntries: timeRes.status === 'fulfilled' ? (timeRes.value.entries ?? []) : [],
+        topEmployees: topRes.status === 'fulfilled' ? (topRes.value.items ?? []) : [],
+      });
+    });
+  }, []);
+
+  const data = apiData;
 
   const handlers = {
     // ---- Sales report
@@ -952,45 +979,41 @@ function ReportsPanel({ data, onAction }) {
         });
       },
       pdf: () => {
-        reportsApi.pdf('sales').then((blob) => {
-          downloadBlob(blob, `ventas-${fmtToday}.pdf`);
-          onAction({ title: "Reporte PDF descargado", sub: "Ventas" });
-        }).catch(() => {
-          const total = data.salesByDay.reduce((s, d) => s + d.ventas, 0);
-          const profit = data.salesByDay.reduce((s, d) => s + d.utilidad, 0);
-          const tickets = data.salesByDay.reduce((s, d) => s + d.tickets, 0);
-          const lineChart = exportUtils.lineChartSVG([
-            { name: "Ventas",   color: "#de0fab", data: data.salesByDay.map((d) => ({ y: d.ventas, label: d.label })) },
-            { name: "Costos",   color: "#0fb0de", data: data.salesByDay.map((d) => ({ y: d.costos })) },
-            { name: "Utilidad", color: "#10b981", data: data.salesByDay.map((d) => ({ y: d.utilidad })) },
-          ]);
-          const ticketsBar = exportUtils.barChartSVG(
-            data.salesByDay.slice(-7).map((d) => ({ label: d.label, value: d.tickets })),
-            { color: "#7b2cbf" }
-          );
-          exportUtils.printReport({
-            title: "Reporte de ventas",
-            subtitle: `Detalle día por día · Últimos ${data.salesByDay.length} días`,
-            charts: [lineChart, ticketsBar],
-            columns: [
-              { label: "Fecha" },
-              { label: "Ventas", align: "right" },
-              { label: "Costos", align: "right" },
-              { label: "Utilidad", align: "right" },
-              { label: "Tickets", align: "right" },
-            ],
-            rows: data.salesByDay.map((d) => [
-              d.date, `$${d.ventas.toLocaleString()}`, `$${d.costos.toLocaleString()}`, `$${d.utilidad.toLocaleString()}`, d.tickets,
-            ]),
-            totals: [
-              { label: "Ventas totales", value: `$${total.toLocaleString()}` },
-              { label: "Utilidad",       value: `$${profit.toLocaleString()}` },
-              { label: "Tickets",        value: tickets },
-              { label: "Ticket promedio",value: `$${(total / tickets).toFixed(2)}` },
-            ],
-          });
-          onAction({ title: "Reporte PDF abierto", sub: "Usa el botón Imprimir/PDF" });
+        // Always use client-side generation with SVG charts
+        const total = data.salesByDay.reduce((s, d) => s + d.ventas, 0);
+        const profit = data.salesByDay.reduce((s, d) => s + d.utilidad, 0);
+        const tickets = data.salesByDay.reduce((s, d) => s + d.tickets, 0);
+        const lineChart = exportUtils.lineChartSVG([
+          { name: "Ventas",   color: "#de0fab", data: data.salesByDay.map((d) => ({ y: d.ventas, label: d.label })) },
+          { name: "Costos",   color: "#0fb0de", data: data.salesByDay.map((d) => ({ y: d.costos })) },
+          { name: "Utilidad", color: "#10b981", data: data.salesByDay.map((d) => ({ y: d.utilidad })) },
+        ]);
+        const ticketsBar = exportUtils.barChartSVG(
+          data.salesByDay.slice(-7).map((d) => ({ label: d.label, value: d.tickets })),
+          { color: "#7b2cbf" }
+        );
+        exportUtils.printReport({
+          title: "Reporte de ventas",
+          subtitle: `Detalle día por día · Últimos ${data.salesByDay.length} días`,
+          charts: [lineChart, ticketsBar],
+          columns: [
+            { label: "Fecha" },
+            { label: "Ventas", align: "right" },
+            { label: "Costos", align: "right" },
+            { label: "Utilidad", align: "right" },
+            { label: "Tickets", align: "right" },
+          ],
+          rows: data.salesByDay.map((d) => [
+            d.date, `$${d.ventas.toLocaleString()}`, `$${d.costos.toLocaleString()}`, `$${d.utilidad.toLocaleString()}`, d.tickets,
+          ]),
+          totals: [
+            { label: "Ventas totales", value: `$${total.toLocaleString()}` },
+            { label: "Utilidad",       value: `$${profit.toLocaleString()}` },
+            { label: "Tickets",        value: tickets },
+            { label: "Ticket promedio",value: `$${(total / tickets).toFixed(2)}` },
+          ],
         });
+        onAction({ title: "Reporte PDF abierto", sub: "Usa el botón Imprimir/PDF" });
       },
     },
 
@@ -1006,66 +1029,62 @@ function ReportsPanel({ data, onAction }) {
           const rows = products.map((p) => [
             p.sku || p.id, p.name, p.brand || "", p.price, p.cost, p.stock,
             (p.price * (p.stock || 0)).toFixed(2),
-            p.stock === 0 ? "Sin stock" : (p.stock < 8 ? "Bajo" : "OK"),
+            p.stock === 0 ? "Sin stock" : (p.stock < (p.stockMin || 8) ? "Bajo" : "OK"),
           ]);
           exportUtils.downloadCSV(`inventario-${fmtToday}.csv`, cols, rows);
           onAction({ title: "Reporte Excel generado", sub: "Inventario completo" });
         });
       },
       pdf: () => {
-        reportsApi.pdf('inventory').then((blob) => {
-          downloadBlob(blob, `inventario-${fmtToday}.pdf`);
-          onAction({ title: "Reporte PDF descargado", sub: "Inventario" });
-        }).catch(() => {
-          const products = data.catalog.filter((p) => p.type === "P");
-          const totalValue = products.reduce((s, p) => s + p.price * (p.stock || 0), 0);
-          const totalCost  = products.reduce((s, p) => s + (p.cost || 0) * (p.stock || 0), 0);
-          const lowStock   = products.filter((p) => (p.stock || 0) < 8).length;
-          const okCount  = products.filter((p) => (p.stock || 0) >= 8).length;
-          const lowCount = products.filter((p) => (p.stock || 0) > 0 && (p.stock || 0) < 8).length;
-          const outCount = products.filter((p) => (p.stock || 0) === 0).length;
+        // Always use client-side generation with SVG charts
+        const products = data.catalog.filter((p) => p.type === "P");
+        const totalValue = products.reduce((s, p) => s + p.price * (p.stock || 0), 0);
+        const totalCost  = products.reduce((s, p) => s + (p.cost || 0) * (p.stock || 0), 0);
+        const lowStock   = products.filter((p) => (p.stock || 0) < (p.stockMin || 8)).length;
+        const okCount  = products.filter((p) => (p.stock || 0) >= (p.stockMin || 8)).length;
+        const lowCount = products.filter((p) => (p.stock || 0) > 0 && (p.stock || 0) < (p.stockMin || 8)).length;
+        const outCount = products.filter((p) => (p.stock || 0) === 0).length;
 
-          const stockPie = exportUtils.pieChartSVG([
-            { label: "OK",        value: okCount,  color: "#10b981" },
-            { label: "Bajo",      value: lowCount, color: "#f59e0b" },
-            { label: "Sin stock", value: outCount, color: "#ef4444" },
-          ]);
-          const valueBar = exportUtils.barChartSVG(
-            [...products]
-              .sort((a, b) => b.price * (b.stock || 0) - a.price * (a.stock || 0))
-              .slice(0, 8)
-              .map((p) => ({ label: p.name, value: +(p.price * (p.stock || 0)).toFixed(0) })),
-            { color: "#de0fab" }
-          );
+        const stockPie = exportUtils.pieChartSVG([
+          { label: "OK",        value: okCount,  color: "#10b981" },
+          { label: "Bajo",      value: lowCount, color: "#f59e0b" },
+          { label: "Sin stock", value: outCount, color: "#ef4444" },
+        ]);
+        const valueBar = exportUtils.barChartSVG(
+          [...products]
+            .sort((a, b) => b.price * (b.stock || 0) - a.price * (a.stock || 0))
+            .slice(0, 8)
+            .map((p) => ({ label: p.name, value: +(p.price * (p.stock || 0)).toFixed(0) })),
+          { color: "#de0fab" }
+        );
 
-          exportUtils.printReport({
-            title: "Reporte de inventario",
-            subtitle: `Stock retail al ${new Date().toLocaleDateString("es-MX", { dateStyle: "long" })}`,
-            charts: [stockPie, valueBar],
-            columns: [
-              { label: "SKU" },
-              { label: "Producto" },
-              { label: "Marca" },
-              { label: "Precio", align: "right" },
-              { label: "Stock",  align: "right" },
-              { label: "Valor",  align: "right" },
-              { label: "Estado" },
-            ],
-            rows: products.map((p) => [
-              p.sku || p.id, p.name, p.brand || "—",
-              `$${p.price}`, p.stock,
-              `$${(p.price * (p.stock || 0)).toFixed(2)}`,
-              p.stock === 0 ? "Sin stock" : (p.stock < 8 ? "Bajo" : "OK"),
-            ]),
-            totals: [
-              { label: "Valor inventario", value: `$${totalValue.toLocaleString()}` },
-              { label: "Costo total",      value: `$${totalCost.toLocaleString()}` },
-              { label: "SKUs",             value: products.length },
-              { label: "Stock bajo",       value: lowStock },
-            ],
-          });
-          onAction({ title: "Reporte PDF abierto", sub: "Usa el botón Imprimir/PDF" });
+        exportUtils.printReport({
+          title: "Reporte de inventario",
+          subtitle: `Stock retail al ${new Date().toLocaleDateString("es-MX", { dateStyle: "long" })}`,
+          charts: [stockPie, valueBar],
+          columns: [
+            { label: "SKU" },
+            { label: "Producto" },
+            { label: "Marca" },
+            { label: "Precio", align: "right" },
+            { label: "Stock",  align: "right" },
+            { label: "Valor",  align: "right" },
+            { label: "Estado" },
+          ],
+          rows: products.map((p) => [
+            p.sku || p.id, p.name, p.brand || "—",
+            `$${p.price}`, p.stock,
+            `$${(p.price * (p.stock || 0)).toFixed(2)}`,
+            p.stock === 0 ? "Sin stock" : (p.stock < (p.stockMin || 8) ? "Bajo" : "OK"),
+          ]),
+          totals: [
+            { label: "Valor inventario", value: `$${totalValue.toLocaleString()}` },
+            { label: "Costo total",      value: `$${totalCost.toLocaleString()}` },
+            { label: "SKUs",             value: products.length },
+            { label: "Stock bajo",       value: lowStock },
+          ],
         });
+        onAction({ title: "Reporte PDF abierto", sub: "Usa el botón Imprimir/PDF" });
       },
     },
 
@@ -1089,61 +1108,57 @@ function ReportsPanel({ data, onAction }) {
         });
       },
       pdf: () => {
-        reportsApi.pdf('payroll').then((blob) => {
-          downloadBlob(blob, `nomina-quincenal-${fmtToday}.pdf`);
-          onAction({ title: "Reporte PDF descargado", sub: "Nómina quincenal" });
-        }).catch(() => {
-          const rows = data.employees.map((e) => {
-            const top = data.topEmployees.find((t) => t.name.toLowerCase().startsWith(e.name.split(" ")[0].toLowerCase().slice(0, 4)));
-            const monthSales = top?.ventas || 0;
-            const salesQ = monthSales / 2;
-            const salaryQ = (e.salary || 0) / 2;
-            const com = +(salesQ * e.commissionRate / 100).toFixed(2);
-            const monthBonus = monthSales >= 2000 ? 200 : monthSales >= 1500 ? 100 : monthSales >= 1000 ? 50 : 0;
-            const bonusQ = monthBonus / 2;
-            return { ...e, salesQ, salaryQ, com, bonus: bonusQ, total: salaryQ + com + bonusQ };
-          });
-          const grandTotal = rows.reduce((s, r) => s + r.total, 0);
-
-          const payrollBar = exportUtils.barChartSVG(
-            rows.map((r) => ({ label: r.name.split(" ")[0], value: +r.total.toFixed(0) })),
-            { color: "#de0fab" }
-          );
-          const breakdownPie = exportUtils.pieChartSVG([
-            { label: "Sueldos base", value: rows.reduce((s, r) => s + r.salaryQ, 0), color: "#7b2cbf" },
-            { label: "Comisiones",   value: rows.reduce((s, r) => s + r.com, 0),    color: "#10b981" },
-            { label: "Bonos",        value: rows.reduce((s, r) => s + r.bonus, 0),  color: "#de0fab" },
-          ]);
-
-          exportUtils.printReport({
-            title: "Reporte de nómina quincenal",
-            subtitle: `Pago variable y fijo · quincena que termina ${new Date().toLocaleDateString("es-MX", { dateStyle: "long" })}`,
-            charts: [payrollBar, breakdownPie],
-            columns: [
-              { label: "Empleada" },
-              { label: "Puesto" },
-              { label: "Ventas Q.",   align: "right" },
-              { label: "Sueldo Q.",   align: "right" },
-              { label: "Comisión", align: "right" },
-              { label: "Bono Q.",     align: "right" },
-              { label: "Total Q.",    align: "right" },
-            ],
-            rows: rows.map((r) => [
-              r.name, r.position,
-              `$${r.salesQ.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
-              `$${r.salaryQ.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
-              `$${r.com.toFixed(2)}`,
-              `$${r.bonus.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
-              `$${r.total.toFixed(2)}`,
-            ]),
-            totals: [
-              { label: "Total quincena", value: `$${grandTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}` },
-              { label: "Total mensual",  value: `$${(grandTotal * 2).toLocaleString(undefined, { maximumFractionDigits: 0 })}` },
-              { label: "Empleadas",      value: rows.length },
-            ],
-          });
-          onAction({ title: "Reporte PDF abierto", sub: "Nómina quincenal" });
+        // Always use client-side generation with SVG charts
+        const rows = data.employees.map((e) => {
+          const top = data.topEmployees.find((t) => t.name.toLowerCase().startsWith(e.name.split(" ")[0].toLowerCase().slice(0, 4)));
+          const monthSales = top?.ventas || 0;
+          const salesQ = monthSales / 2;
+          const salaryQ = (e.salary || 0) / 2;
+          const com = +(salesQ * e.commissionRate / 100).toFixed(2);
+          const monthBonus = monthSales >= 2000 ? 200 : monthSales >= 1500 ? 100 : monthSales >= 1000 ? 50 : 0;
+          const bonusQ = monthBonus / 2;
+          return { ...e, salesQ, salaryQ, com, bonus: bonusQ, total: salaryQ + com + bonusQ };
         });
+        const grandTotal = rows.reduce((s, r) => s + r.total, 0);
+
+        const payrollBar = exportUtils.barChartSVG(
+          rows.map((r) => ({ label: r.name.split(" ")[0], value: +r.total.toFixed(0) })),
+          { color: "#de0fab" }
+        );
+        const breakdownPie = exportUtils.pieChartSVG([
+          { label: "Sueldos base", value: rows.reduce((s, r) => s + r.salaryQ, 0), color: "#7b2cbf" },
+          { label: "Comisiones",   value: rows.reduce((s, r) => s + r.com, 0),    color: "#10b981" },
+          { label: "Bonos",        value: rows.reduce((s, r) => s + r.bonus, 0),  color: "#de0fab" },
+        ]);
+
+        exportUtils.printReport({
+          title: "Reporte de nómina quincenal",
+          subtitle: `Pago variable y fijo · quincena que termina ${new Date().toLocaleDateString("es-MX", { dateStyle: "long" })}`,
+          charts: [payrollBar, breakdownPie],
+          columns: [
+            { label: "Empleada" },
+            { label: "Puesto" },
+            { label: "Ventas Q.",   align: "right" },
+            { label: "Sueldo Q.",   align: "right" },
+            { label: "Comisión", align: "right" },
+            { label: "Bono Q.",     align: "right" },
+            { label: "Total Q.",    align: "right" },
+          ],
+          rows: rows.map((r) => [
+            r.name, r.position,
+            `$${r.salesQ.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+            `$${r.salaryQ.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+            `$${r.com.toFixed(2)}`,
+            `$${r.bonus.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+            `$${r.total.toFixed(2)}`,
+          ]),
+          totals: [
+            { label: "Total quincena", value: `$${grandTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}` },
+            { label: "Total mensual",  value: `$${(grandTotal * 2).toLocaleString(undefined, { maximumFractionDigits: 0 })}` },
+            { label: "Empleadas",      value: rows.length },
+          ],
+        });
+        onAction({ title: "Reporte PDF abierto", sub: "Nómina quincenal" });
       },
     },
 
@@ -1167,65 +1182,61 @@ function ReportsPanel({ data, onAction }) {
         });
       },
       pdf: () => {
-        reportsApi.pdf('attendance').then((blob) => {
-          downloadBlob(blob, `asistencia-${fmtToday}.pdf`);
-          onAction({ title: "Reporte PDF descargado", sub: "Asistencia" });
-        }).catch(() => {
-          // Aggregate hours per day for the last 30 days
-          const byDate = {};
-          data.historicTimeEntries.forEach((t) => {
-            const [ih, im] = t.in.split(":").map(Number);
-            const [oh, om] = t.out.split(":").map(Number);
-            const h = (oh * 60 + om - (ih * 60 + im)) / 60;
-            byDate[t.date] = (byDate[t.date] || 0) + h;
-          });
-          const last30 = Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b)).slice(-30);
-          const lineChart = exportUtils.lineChartSVG([
-            {
-              name: "Horas trabajadas",
-              color: "#de0fab",
-              data: last30.map(([date, h]) => ({ y: +h.toFixed(1), label: date.slice(5) })),
-            },
-          ]);
-
-          // Hours per employee
-          const perEmp = {};
-          data.historicTimeEntries.forEach((t) => {
-            const [ih, im] = t.in.split(":").map(Number);
-            const [oh, om] = t.out.split(":").map(Number);
-            const h = (oh * 60 + om - (ih * 60 + im)) / 60;
-            perEmp[t.userId] = (perEmp[t.userId] || 0) + h;
-          });
-          const empBar = exportUtils.barChartSVG(
-            Object.entries(perEmp).map(([userId, h]) => ({
-              label: data.employees.find((e) => e.id === userId)?.name.split(" ")[0] || userId,
-              value: +h.toFixed(0),
-            })),
-            { color: "#0fb0de" }
-          );
-
-          const last7 = data.historicTimeEntries.slice(-50);
-          exportUtils.printReport({
-            title: "Reporte de asistencia",
-            subtitle: "Últimos 60 días — horas trabajadas y marcas recientes",
-            charts: [lineChart, empBar],
-            columns: [
-              { label: "Fecha" },
-              { label: "Empleada" },
-              { label: "Entrada" },
-              { label: "Salida" },
-              { label: "Horas",   align: "right" },
-            ],
-            rows: last7.map((t) => {
-              const u = data.employees.find((e) => e.id === t.userId);
-              const [ih, im] = t.in.split(":").map(Number);
-              const [oh, om] = t.out.split(":").map(Number);
-              const mins = oh * 60 + om - (ih * 60 + im);
-              return [t.date, u?.name || t.userId, t.in, t.out, (mins / 60).toFixed(2)];
-            }),
-          });
-          onAction({ title: "Reporte PDF abierto", sub: "Usa el botón Imprimir/PDF" });
+        // Always use client-side generation with SVG charts
+        // Aggregate hours per day for the last 30 days
+        const byDate = {};
+        data.historicTimeEntries.forEach((t) => {
+          const [ih, im] = t.in.split(":").map(Number);
+          const [oh, om] = t.out.split(":").map(Number);
+          const h = (oh * 60 + om - (ih * 60 + im)) / 60;
+          byDate[t.date] = (byDate[t.date] || 0) + h;
         });
+        const last30 = Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b)).slice(-30);
+        const lineChart = exportUtils.lineChartSVG([
+          {
+            name: "Horas trabajadas",
+            color: "#de0fab",
+            data: last30.map(([date, h]) => ({ y: +h.toFixed(1), label: date.slice(5) })),
+          },
+        ]);
+
+        // Hours per employee
+        const perEmp = {};
+        data.historicTimeEntries.forEach((t) => {
+          const [ih, im] = t.in.split(":").map(Number);
+          const [oh, om] = t.out.split(":").map(Number);
+          const h = (oh * 60 + om - (ih * 60 + im)) / 60;
+          perEmp[t.userId] = (perEmp[t.userId] || 0) + h;
+        });
+        const empBar = exportUtils.barChartSVG(
+          Object.entries(perEmp).map(([userId, h]) => ({
+            label: data.employees.find((e) => e.id === userId)?.name.split(" ")[0] || userId,
+            value: +h.toFixed(0),
+          })),
+          { color: "#0fb0de" }
+        );
+
+        const last7 = data.historicTimeEntries.slice(-50);
+        exportUtils.printReport({
+          title: "Reporte de asistencia",
+          subtitle: "Últimos 60 días — horas trabajadas y marcas recientes",
+          charts: [lineChart, empBar],
+          columns: [
+            { label: "Fecha" },
+            { label: "Empleada" },
+            { label: "Entrada" },
+            { label: "Salida" },
+            { label: "Horas",   align: "right" },
+          ],
+          rows: last7.map((t) => {
+            const u = data.employees.find((e) => e.id === t.userId);
+            const [ih, im] = t.in.split(":").map(Number);
+            const [oh, om] = t.out.split(":").map(Number);
+            const mins = oh * 60 + om - (ih * 60 + im);
+            return [t.date, u?.name || t.userId, t.in, t.out, (mins / 60).toFixed(2)];
+          }),
+        });
+        onAction({ title: "Reporte PDF abierto", sub: "Usa el botón Imprimir/PDF" });
       },
     },
 
@@ -1243,35 +1254,31 @@ function ReportsPanel({ data, onAction }) {
         });
       },
       pdf: () => {
-        reportsApi.pdf('top-categories').then((blob) => {
-          downloadBlob(blob, `top-categorias-${fmtToday}.pdf`);
-          onAction({ title: "Reporte PDF descargado", sub: "Top categorías" });
-        }).catch(() => {
-          const total = data.categoryRevenue.reduce((s, c) => s + c.value, 0);
-          const pie = exportUtils.pieChartSVG(
-            data.categoryRevenue.map((c) => ({ label: c.name, value: c.value, color: c.color }))
-          );
-          const bar = exportUtils.barChartSVG(
-            data.categoryRevenue.map((c) => ({ label: c.name, value: c.value, color: c.color }))
-          );
-          exportUtils.printReport({
-            title: "Top categorías del mes",
-            subtitle: "Ingresos por línea de servicio",
-            charts: [pie, bar],
-            columns: [
-              { label: "Categoría" },
-              { label: "Ingresos",   align: "right" },
-              { label: "Participación", align: "right" },
-            ],
-            rows: data.categoryRevenue.map((c) => [
-              c.name,
-              `$${c.value.toLocaleString()}`,
-              `${((c.value / total) * 100).toFixed(1)}%`,
-            ]),
-            totals: [{ label: "Ingresos totales", value: `$${total.toLocaleString()}` }],
-          });
-          onAction({ title: "Reporte PDF abierto", sub: "Usa el botón Imprimir/PDF" });
+        // Always use client-side generation with SVG charts
+        const total = data.categoryRevenue.reduce((s, c) => s + c.value, 0);
+        const pie = exportUtils.pieChartSVG(
+          data.categoryRevenue.map((c) => ({ label: c.name, value: c.value, color: c.color }))
+        );
+        const bar = exportUtils.barChartSVG(
+          data.categoryRevenue.map((c) => ({ label: c.name, value: c.value, color: c.color }))
+        );
+        exportUtils.printReport({
+          title: "Top categorías del mes",
+          subtitle: "Ingresos por línea de servicio",
+          charts: [pie, bar],
+          columns: [
+            { label: "Categoría" },
+            { label: "Ingresos",   align: "right" },
+            { label: "Participación", align: "right" },
+          ],
+          rows: data.categoryRevenue.map((c) => [
+            c.name,
+            `$${c.value.toLocaleString()}`,
+            `${((c.value / total) * 100).toFixed(1)}%`,
+          ]),
+          totals: [{ label: "Ingresos totales", value: `$${total.toLocaleString()}` }],
         });
+        onAction({ title: "Reporte PDF abierto", sub: "Usa el botón Imprimir/PDF" });
       },
     },
 
@@ -1295,7 +1302,7 @@ function ReportsPanel({ data, onAction }) {
           const products = data.catalog.filter((p) => p.type === "P");
           rows.push(["SKUs", products.length]);
           rows.push(["Valor inventario", products.reduce((s, p) => s + p.price * (p.stock || 0), 0)]);
-          rows.push(["Stock bajo", products.filter((p) => (p.stock || 0) < 8).length]);
+          rows.push(["Stock bajo", products.filter((p) => (p.stock || 0) < (p.stockMin || 8)).length]);
           rows.push([]);
           rows.push(["EQUIPO"]);
           rows.push(["Empleadas activas", data.employees.filter((e) => e.status === "activa").length]);
@@ -1305,160 +1312,165 @@ function ReportsPanel({ data, onAction }) {
         });
       },
       pdf: () => {
-        reportsApi.pdf('executive').then((blob) => {
-          downloadBlob(blob, `reporte-ejecutivo-${fmtToday}.pdf`);
-          onAction({ title: "Reporte PDF descargado", sub: "Reporte ejecutivo" });
-        }).catch(() => {
-          // SECTION 1 — KPIs + sales trend
-          const total = data.salesByDay.reduce((s, d) => s + d.ventas, 0);
-          const profit = data.salesByDay.reduce((s, d) => s + d.utilidad, 0);
-          const tickets = data.salesByDay.reduce((s, d) => s + d.tickets, 0);
-          const margin = ((profit / total) * 100).toFixed(1);
-          const salesLine = exportUtils.lineChartSVG([
-            { name: "Ventas",   color: "#de0fab", data: data.salesByDay.map((d) => ({ y: d.ventas, label: d.label })) },
-            { name: "Utilidad", color: "#10b981", data: data.salesByDay.map((d) => ({ y: d.utilidad })) },
-          ], { height: 200 });
+        // Always use client-side generation with SVG charts
+        const salesByDay = data.salesByDay || [];
+        const catalog = data.catalog || [];
+        const employees = data.employees || [];
+        const categoryRevenue = data.categoryRevenue || [];
+        const historicTimeEntries = data.historicTimeEntries || [];
+        const topEmployees = data.topEmployees || [];
 
-          // SECTION 2 — Inventory snapshot
-          const products = data.catalog.filter((p) => p.type === "P");
-          const totalValue = products.reduce((s, p) => s + p.price * (p.stock || 0), 0);
-          const lowStock   = products.filter((p) => (p.stock || 0) < 8);
-          const stockPie = exportUtils.pieChartSVG([
-            { label: "OK",        value: products.filter((p) => (p.stock || 0) >= 8).length,  color: "#10b981" },
-            { label: "Bajo",      value: products.filter((p) => (p.stock || 0) > 0 && (p.stock || 0) < 8).length, color: "#f59e0b" },
-            { label: "Sin stock", value: products.filter((p) => (p.stock || 0) === 0).length, color: "#ef4444" },
-          ], { height: 180 });
+        // SECTION 1 — KPIs + sales trend
+        const total = salesByDay.reduce((s, d) => s + (d.ventas || 0), 0);
+        const profit = salesByDay.reduce((s, d) => s + (d.utilidad || 0), 0);
+        const tickets = salesByDay.reduce((s, d) => s + (d.tickets || 0), 0);
+        const margin = total > 0 ? ((profit / total) * 100).toFixed(1) : "0.0";
+        const salesLine = exportUtils.lineChartSVG([
+          { name: "Ventas",   color: "#de0fab", data: salesByDay.map((d) => ({ y: d.ventas || 0, label: d.label || d.date })) },
+          { name: "Utilidad", color: "#10b981", data: salesByDay.map((d) => ({ y: d.utilidad || 0 })) },
+        ], { height: 200 });
 
-          // SECTION 3 — Category mix
-          const catPie = exportUtils.pieChartSVG(
-            data.categoryRevenue.map((c) => ({ label: c.name, value: c.value, color: c.color })),
-            { height: 200 }
-          );
+        // SECTION 2 — Inventory snapshot
+        const products = catalog.filter((p) => p.type === "P");
+        const totalValue = products.reduce((s, p) => s + (p.price || 0) * (p.stock || 0), 0);
+        const lowStock   = products.filter((p) => (p.stock || 0) < (p.stockMin || 8));
+        const stockPie = exportUtils.pieChartSVG([
+          { label: "OK",        value: products.filter((p) => (p.stock || 0) >= (p.stockMin || 8)).length,  color: "#10b981" },
+          { label: "Bajo",      value: products.filter((p) => (p.stock || 0) > 0 && (p.stock || 0) < (p.stockMin || 8)).length, color: "#f59e0b" },
+          { label: "Sin stock", value: products.filter((p) => (p.stock || 0) === 0).length, color: "#ef4444" },
+        ], { height: 180 });
 
-          // SECTION 4 — Team / payroll
-          const payroll = data.employees.map((e) => {
-            const top = data.topEmployees.find((t) => t.name.toLowerCase().startsWith(e.name.split(" ")[0].toLowerCase().slice(0, 4)));
-            const sales = top?.ventas || 0;
-            const com = +(sales * e.commissionRate / 100).toFixed(2);
-            const bonus = sales >= 2000 ? 200 : sales >= 1500 ? 100 : sales >= 1000 ? 50 : 0;
-            return { ...e, sales, com, bonus, total: e.salary + com + bonus };
-          });
-          const payrollTotal = payroll.reduce((s, r) => s + r.total, 0);
-          const payrollBar = exportUtils.barChartSVG(
-            payroll.map((r) => ({ label: r.name.split(" ")[0], value: +r.total.toFixed(0) })),
-            { color: "#de0fab", height: 200 }
-          );
+        // SECTION 3 — Category mix
+        const catTotal = categoryRevenue.reduce((s, c) => s + (c.value || 0), 0);
+        const catPie = exportUtils.pieChartSVG(
+          categoryRevenue.map((c) => ({ label: c.name, value: c.value || 0, color: c.color })),
+          { height: 200 }
+        );
 
-          // SECTION 5 — Attendance trend
-          const byDate = {};
-          data.historicTimeEntries.forEach((t) => {
-            const [ih, im] = t.in.split(":").map(Number);
-            const [oh, om] = t.out.split(":").map(Number);
-            const h = (oh * 60 + om - (ih * 60 + im)) / 60;
-            byDate[t.date] = (byDate[t.date] || 0) + h;
-          });
-          const last14 = Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b)).slice(-14);
-          const attLine = exportUtils.lineChartSVG([
-            { name: "Horas/día", color: "#0fb0de", data: last14.map(([date, h]) => ({ y: +h.toFixed(1), label: date.slice(5) })) },
-          ], { height: 180 });
-
-          exportUtils.printReport({
-            docTitle: "Reporte Ejecutivo",
-            docSubtitle: `Resumen completo del salón · ${new Date().toLocaleDateString("es-MX", { dateStyle: "long" })}`,
-            sections: [
-              {
-                title: "1. Resumen financiero",
-                subtitle: "Indicadores clave de los últimos 30 días",
-                chart: salesLine,
-                columns: [
-                  { label: "Indicador" },
-                  { label: "Valor", align: "right" },
-                ],
-                rows: [
-                  ["Ventas totales",  `$${total.toLocaleString()}`],
-                  ["Utilidad neta",   `$${profit.toLocaleString()}`],
-                  ["Margen",          `${margin}%`],
-                  ["Tickets",         tickets],
-                  ["Ticket promedio", `$${(total / tickets).toFixed(2)}`],
-                ],
-                totals: [
-                  { label: "Ventas",       value: `$${total.toLocaleString()}` },
-                  { label: "Utilidad",     value: `$${profit.toLocaleString()}` },
-                  { label: "Margen",       value: `${margin}%` },
-                  { label: "Tickets",      value: tickets },
-                ],
-              },
-              {
-                title: "2. Inventario",
-                subtitle: `${products.length} SKUs · ${lowStock.length} con stock crítico`,
-                chart: stockPie,
-                columns: [
-                  { label: "Producto" },
-                  { label: "Stock",  align: "right" },
-                  { label: "Estado" },
-                ],
-                rows: lowStock.length > 0
-                  ? lowStock.map((p) => [p.name, p.stock, p.stock === 0 ? "Sin stock" : "Bajo"])
-                  : [["✓ Sin alertas de stock", "—", "OK"]],
-                totals: [
-                  { label: "Valor inventario", value: `$${totalValue.toLocaleString()}` },
-                  { label: "SKUs",             value: products.length },
-                  { label: "Stock bajo",       value: lowStock.length },
-                ],
-              },
-              {
-                title: "3. Mix de ingresos",
-                subtitle: "Participación por categoría",
-                chart: catPie,
-                columns: [
-                  { label: "Categoría" },
-                  { label: "Ingresos", align: "right" },
-                  { label: "Participación", align: "right" },
-                ],
-                rows: data.categoryRevenue.map((c) => [
-                  c.name,
-                  `$${c.value.toLocaleString()}`,
-                  `${((c.value / data.categoryRevenue.reduce((s, x) => s + x.value, 0)) * 100).toFixed(1)}%`,
-                ]),
-              },
-              {
-                title: "4. Nómina del mes",
-                subtitle: `${payroll.length} empleadas · pago total $${payrollTotal.toLocaleString()}`,
-                chart: payrollBar,
-                columns: [
-                  { label: "Empleada" },
-                  { label: "Puesto" },
-                  { label: "Ventas",   align: "right" },
-                  { label: "Sueldo",   align: "right" },
-                  { label: "Comisión", align: "right" },
-                  { label: "Bono",     align: "right" },
-                  { label: "Total",    align: "right" },
-                ],
-                rows: payroll.map((r) => [
-                  r.name, r.position,
-                  `$${r.sales.toLocaleString()}`,
-                  `$${r.salary.toLocaleString()}`,
-                  `$${r.com.toFixed(2)}`,
-                  `$${r.bonus}`,
-                  `$${r.total.toFixed(2)}`,
-                ]),
-                totals: [{ label: "Total a pagar", value: `$${payrollTotal.toLocaleString()}` }],
-              },
-              {
-                title: "5. Asistencia",
-                subtitle: "Horas trabajadas por el equipo · últimos 14 días",
-                chart: attLine,
-                columns: [
-                  { label: "Empleada" },
-                  { label: "Estado" },
-                  { label: "Horario" },
-                ],
-                rows: data.employees.map((e) => [e.name, e.status, e.schedule]),
-              },
-            ],
-          });
-          onAction({ title: "Reporte PDF abierto", sub: "Resumen ejecutivo completo" });
+        // SECTION 4 — Team / payroll
+        const payroll = employees.map((e) => {
+          const first4 = e.name.split(" ")[0].toLowerCase().slice(0, 4);
+          const top = topEmployees.find((t) => t.name.toLowerCase().startsWith(first4));
+          const sales = top?.ventas || 0;
+          const com = +(sales * (e.commissionRate || 0) / 100).toFixed(2);
+          const bonus = sales >= 2000 ? 200 : sales >= 1500 ? 100 : sales >= 1000 ? 50 : 0;
+          return { ...e, sales, com, bonus, total: (e.salary || 0) + com + bonus };
         });
+        const payrollTotal = payroll.reduce((s, r) => s + r.total, 0);
+        const payrollBar = exportUtils.barChartSVG(
+          payroll.map((r) => ({ label: r.name.split(" ")[0], value: +r.total.toFixed(0) })),
+          { color: "#de0fab", height: 200 }
+        );
+
+        // SECTION 5 — Attendance trend
+        const byDate = {};
+        historicTimeEntries.forEach((t) => {
+          const [ih, im] = (t.in || "00:00").split(":").map(Number);
+          const [oh, om] = (t.out || "00:00").split(":").map(Number);
+          const h = (oh * 60 + om - (ih * 60 + im)) / 60;
+          byDate[t.date] = (byDate[t.date] || 0) + h;
+        });
+        const last14 = Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b)).slice(-14);
+        const attLine = exportUtils.lineChartSVG([
+          { name: "Horas/día", color: "#0fb0de", data: last14.map(([date, h]) => ({ y: +h.toFixed(1), label: date.slice(5) })) },
+        ], { height: 180 });
+
+        exportUtils.printReport({
+          docTitle: "Reporte Ejecutivo",
+          docSubtitle: `Resumen completo del salón · ${new Date().toLocaleDateString("es-MX", { dateStyle: "long" })}`,
+          sections: [
+            {
+              title: "1. Resumen financiero",
+              subtitle: "Indicadores clave de los últimos 30 días",
+              chart: salesLine,
+              columns: [
+                { label: "Indicador" },
+                { label: "Valor", align: "right" },
+              ],
+              rows: [
+                ["Ventas totales",  `$${total.toLocaleString()}`],
+                ["Utilidad neta",   `$${profit.toLocaleString()}`],
+                ["Margen",          `${margin}%`],
+                ["Tickets",         tickets],
+                ["Ticket promedio", `$${(tickets > 0 ? total / tickets : 0).toFixed(2)}`],
+              ],
+              totals: [
+                { label: "Ventas",       value: `$${total.toLocaleString()}` },
+                { label: "Utilidad",     value: `$${profit.toLocaleString()}` },
+                { label: "Margen",       value: `${margin}%` },
+                { label: "Tickets",      value: tickets },
+              ],
+            },
+            {
+              title: "2. Inventario",
+              subtitle: `${products.length} SKUs · ${lowStock.length} con stock crítico`,
+              chart: stockPie,
+              columns: [
+                { label: "Producto" },
+                { label: "Stock",  align: "right" },
+                { label: "Estado" },
+              ],
+              rows: lowStock.length > 0
+                ? lowStock.map((p) => [p.name, p.stock || 0, (p.stock || 0) === 0 ? "Sin stock" : "Bajo"])
+                : [["✓ Sin alertas de stock", "—", "OK"]],
+              totals: [
+                { label: "Valor inventario", value: `$${totalValue.toLocaleString()}` },
+                { label: "SKUs",             value: products.length },
+                { label: "Stock bajo",       value: lowStock.length },
+              ],
+            },
+            {
+              title: "3. Mix de ingresos",
+              subtitle: "Participación por categoría",
+              chart: catPie,
+              columns: [
+                { label: "Categoría" },
+                { label: "Ingresos", align: "right" },
+                { label: "Participación", align: "right" },
+              ],
+              rows: categoryRevenue.map((c) => [
+                c.name,
+                `$${(c.value || 0).toLocaleString()}`,
+                `${catTotal > 0 ? (((c.value || 0) / catTotal) * 100).toFixed(1) : "0.0"}%`,
+              ]),
+            },
+            {
+              title: "4. Nómina del mes",
+              subtitle: `${payroll.length} empleadas · pago total $${payrollTotal.toLocaleString()}`,
+              chart: payrollBar,
+              columns: [
+                { label: "Empleada" },
+                { label: "Puesto" },
+                { label: "Ventas",   align: "right" },
+                { label: "Sueldo",   align: "right" },
+                { label: "Comisión", align: "right" },
+                { label: "Bono",     align: "right" },
+                { label: "Total",    align: "right" },
+              ],
+              rows: payroll.map((r) => [
+                r.name, r.position,
+                `$${(r.sales || 0).toLocaleString()}`,
+                `$${(r.salary || 0).toLocaleString()}`,
+                `$${(r.com || 0).toFixed(2)}`,
+                `$${r.bonus || 0}`,
+                `$${(r.total || 0).toFixed(2)}`,
+              ]),
+              totals: [{ label: "Total a pagar", value: `$${payrollTotal.toLocaleString()}` }],
+            },
+            {
+              title: "5. Asistencia",
+              subtitle: "Horas trabajadas por el equipo · últimos 14 días",
+              chart: attLine,
+              columns: [
+                { label: "Empleada" },
+                { label: "Estado" },
+                { label: "Horario" },
+              ],
+              rows: employees.map((e) => [e.name, e.status, e.schedule || "—"]),
+            },
+          ],
+        });
+        onAction({ title: "Reporte PDF abierto", sub: "Resumen ejecutivo completo" });
       },
     },
   };

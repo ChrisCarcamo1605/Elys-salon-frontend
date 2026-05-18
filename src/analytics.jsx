@@ -1,4 +1,5 @@
 // Analytics dashboard for admin. Uses Recharts.
+import React from 'react';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Area, AreaChart, BarChart, Bar, PieChart, Pie, Cell, Legend,
@@ -8,35 +9,54 @@ import { Icons } from './icons.jsx';
 import { TopBar } from './menu.jsx';
 import { analytics as analyticsApi, apiError } from './api.js';
 
-function Analytics({ user, data, onLock, onBack }) {
-  const [salesByDay, setSalesByDay] = React.useState(data.salesByDay);
-  const [categoryRevenue, setCategoryRevenue] = React.useState(data.categoryRevenue);
-  const [topEmployees, setTopEmployees] = React.useState(data.topEmployees);
-  const [hourlyTraffic, setHourlyTraffic] = React.useState(data.hourlyTraffic);
+const RANGES = [
+  { key: '7d', label: '7 días' },
+  { key: '30d', label: '30 días' },
+  { key: '90d', label: '90 días' },
+  { key: '365d', label: 'Año' },
+];
+
+function Analytics({ user, onLock, onBack }) {
+  const [range, setRange] = React.useState('30d');
+  const [loading, setLoading] = React.useState(false);
+  const [salesByDay, setSalesByDay] = React.useState([]);
+  const [categoryRevenue, setCategoryRevenue] = React.useState([]);
+  const [topEmployees, setTopEmployees] = React.useState([]);
+  const [hourlyTraffic, setHourlyTraffic] = React.useState([]);
+  const [kpis, setKpis] = React.useState(null);
 
   React.useEffect(() => {
+    setLoading(true);
     const today = new Date().toISOString().split('T')[0];
     Promise.allSettled([
-      analyticsApi.salesByDay('30d'),
-      analyticsApi.categoryRevenue('30d'),
-      analyticsApi.topEmployees('30d'),
+      analyticsApi.salesByDay(range),
+      analyticsApi.categoryRevenue(range),
+      analyticsApi.topEmployees(range),
       analyticsApi.hourlyTraffic(today),
-      analyticsApi.kpis('30d'),
+      analyticsApi.kpis(range),
     ]).then(([salesRes, catRes, empRes, hourlyRes, kpisRes]) => {
       if (salesRes.status === 'fulfilled') { setSalesByDay(salesRes.value.items); }
       if (catRes.status === 'fulfilled')   { setCategoryRevenue(catRes.value.items); }
       if (empRes.status === 'fulfilled')   { setTopEmployees(empRes.value.items); }
       if (hourlyRes.status === 'fulfilled'){ setHourlyTraffic(hourlyRes.value.items); }
-    });
-  }, []);
+      if (kpisRes.status === 'fulfilled')  { setKpis(kpisRes.value); }
+    }).finally(() => setLoading(false));
+  }, [range]);
 
-  const last7 = salesByDay.slice(-7);
-  const last30 = salesByDay;
-  const totalVentas = last30.reduce((s, d) => s + d.ventas, 0);
-  const totalCostos = last30.reduce((s, d) => s + d.costos, 0);
+  const days = parseInt(range) || 30;
+  const rangeLabel = RANGES.find(r => r.key === range)?.label ?? `${days} días`;
+
+  const safeSales = Array.isArray(salesByDay) ? salesByDay : [];
+  const last7 = safeSales.slice(-7);
+  const lastN = safeSales;
+  const totalVentas = lastN.reduce((s, d) => s + (d.ventas ?? 0), 0);
+  const totalCostos = lastN.reduce((s, d) => s + (d.costos ?? 0), 0);
   const totalUtilidad = totalVentas - totalCostos;
-  const margen = ((totalUtilidad / totalVentas) * 100).toFixed(1);
-  const ticketPromedio = (totalVentas / last30.reduce((s, d) => s + d.tickets, 0)).toFixed(2);
+  const margen = kpis?.margin != null ? Number(kpis.margin).toFixed(1) : (totalVentas > 0 ? ((totalUtilidad / totalVentas) * 100).toFixed(1) : "0.0");
+  const totalTickets = kpis?.ticketCount ?? lastN.reduce((s, d) => s + (d.tickets ?? 0), 0);
+  const ticketPromedio = kpis?.avgTicket != null ? Number(kpis.avgTicket).toFixed(2) : (totalTickets > 0 ? (totalVentas / totalTickets).toFixed(2) : "0.00");
+  const ventasDelta = kpis?.salesDelta != null ? kpis.salesDelta : 0;
+  const ventasDeltaPct = Number(ventasDelta).toFixed(1);
 
   const tooltipStyle = {
     background: "var(--surface)",
@@ -74,22 +94,21 @@ function Analytics({ user, data, onLock, onBack }) {
       <div className="ana-body">
         <div className="ana-head">
           <div>
-            <div className="ana-eyebrow">Resumen · Últimos 30 días</div>
+            <div className="ana-eyebrow">{loading ? 'Cargando…' : `Resumen · Últimos ${rangeLabel}`}</div>
             <h2 className="ana-title">Rentabilidad del salón</h2>
           </div>
           <div className="ana-range">
-            <button className="range-pill">7 días</button>
-            <button className="range-pill active">30 días</button>
-            <button className="range-pill">90 días</button>
-            <button className="range-pill">Año</button>
+            {RANGES.map(r => (
+              <button key={r.key} className={`range-pill${r.key === range ? ' active' : ''}`} onClick={() => setRange(r.key)}>{r.label}</button>
+            ))}
           </div>
         </div>
 
-        <div className="kpis">
-          <Kpi label="Ventas totales" value={`$${totalVentas.toLocaleString()}`} delta="+12.4%" tone="up"/>
-          <Kpi label="Utilidad neta" value={`$${totalUtilidad.toLocaleString()}`} delta="+18.1%" tone="up"/>
-          <Kpi label="Margen" value={`${margen}%`} delta="+1.6 pp" tone="up"/>
-          <Kpi label="Ticket promedio" value={`$${ticketPromedio}`} delta="−2.1%" tone="down"/>
+        <div className={`kpis${loading ? ' kpis-loading' : ''}`}>
+          <Kpi label="Ventas totales" value={`$${totalVentas.toLocaleString()}`} delta={`${ventasDeltaPct >= 0 ? '+' : ''}${ventasDeltaPct}%`} tone={ventasDeltaPct >= 0 ? 'up' : 'down'}/>
+          <Kpi label="Utilidad neta" value={`$${totalUtilidad.toLocaleString()}`} delta={kpis?.totalProfit != null ? '' : ''} tone="up"/>
+          <Kpi label="Margen" value={`${margen}%`} delta="" tone="up"/>
+          <Kpi label="Ticket promedio" value={`$${ticketPromedio}`} delta="" tone="up"/>
         </div>
 
         <div className="ana-grid">
@@ -108,7 +127,7 @@ function Analytics({ user, data, onLock, onBack }) {
             </div>
             <div style={{ height: 280 }}>
               <ResponsiveContainer>
-                <LineChart data={last30} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+                <LineChart data={lastN} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false}/>
                   <XAxis dataKey="label" stroke="var(--ink-dim)" tick={{fontSize:11}} tickLine={false} axisLine={false}/>
                   <YAxis stroke="var(--ink-dim)" tick={{fontSize:11}} tickLine={false} axisLine={false} width={42}/>
@@ -271,9 +290,9 @@ function Kpi({ label, value, delta, tone }) {
     <div className="kpi">
       <div className="kpi-label">{label}</div>
       <div className="kpi-value">{value}</div>
-      <div className={`kpi-delta ${tone}`}>
+      {delta ? <div className={`kpi-delta ${tone}`}>
         {tone === "up" ? "↑" : "↓"} {delta}
-      </div>
+      </div> : null}
     </div>
   );
 }

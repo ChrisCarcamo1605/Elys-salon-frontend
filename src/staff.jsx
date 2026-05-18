@@ -6,13 +6,29 @@ import { TopBar } from './menu.jsx';
 import { exportUtils } from './reports.jsx';
 import { staff as staffApi, timeclock as timeclockApi, payroll as payrollApi, apiError } from './api.js';
 
+// Permisos otorgables individualmente a empleadas
+const GRANTABLE_PERMS = [
+  { key: 'tickets.discount',    label: 'Aplicar descuentos',       desc: 'Puede modificar precios y descuentos al cobrar' },
+  { key: 'tickets.void',        label: 'Anular ventas',            desc: 'Puede cancelar tickets ya cobrados' },
+  { key: 'tickets.read',        label: 'Ver historial de ventas',  desc: 'Puede consultar ventas pasadas' },
+  { key: 'reports.read',        label: 'Ver reportes y alertas',   desc: 'Acceso a la pantalla de reportes' },
+  { key: 'analytics.read',      label: 'Ver analíticas',           desc: 'Acceso a gráficas de rentabilidad' },
+  { key: 'inventory.create',    label: 'Añadir entradas de stock', desc: 'Puede registrar compras de inventario' },
+  { key: 'inventory.adjust',    label: 'Ajustar inventario',       desc: 'Puede editar cantidades de stock' },
+  { key: 'users.read',          label: 'Ver plantilla y nómina',   desc: 'Puede ver el equipo y horas trabajadas' },
+  { key: 'payroll.read',        label: 'Ver nómina',               desc: 'Puede consultar la nómina del equipo' },
+  { key: 'attendance.read_all', label: 'Ver asistencia completa',  desc: 'Ve el historial de todas las empleadas' },
+  { key: 'bonuses.manage',      label: 'Gestionar metas y bonos',  desc: 'Puede crear y editar metas' },
+  { key: 'offers.write',        label: 'Gestionar promociones',    desc: 'Puede crear y editar promociones' },
+];
+
 // ============================================================
 //   STAFF — Plantilla, salarios, asistencia
 // ============================================================
 
-function Staff({ user, data, onLock, onBack }) {
+function Staff({ user, onLock, onBack }) {
   const [tab, setTab] = React.useState("roster");
-  const [employees, setEmployees] = React.useState(data.employees);
+  const [employees, setEmployees] = React.useState([]);
   const [editEmp, setEditEmp] = React.useState(null);
   const [confirmDelete, setConfirmDelete] = React.useState(null);
   const [toast, setToast] = React.useState(null);
@@ -51,6 +67,27 @@ function Staff({ user, data, onLock, onBack }) {
       .catch((err) => {
         showToast("Error", apiError(err));
       });
+  };
+
+  const changeEmployeePin = (id, pin) => {
+    staffApi.changePin(id, pin)
+      .then(() => showToast("PIN actualizado", "Cambios listos"))
+      .catch((err) => showToast("Error", apiError(err)));
+  };
+
+  const savePermissions = (id, permissions) => {
+    staffApi.updatePermissions(id, { permissions })
+      .then((saved) => {
+        setEmployees((es) => {
+          const idx = es.findIndex((e) => e.id === saved.id);
+          if (idx === -1) return es;
+          const copy = [...es];
+          copy[idx] = saved;
+          return copy;
+        });
+        showToast("Permisos actualizados", saved.name);
+      })
+      .catch((err) => showToast("Error", apiError(err)));
   };
 
   const deleteEmployee = (id) => {
@@ -94,6 +131,7 @@ function Staff({ user, data, onLock, onBack }) {
                   payType: "salario",
                   salary: 0,
                   commissionRate: 0,
+                  pin: "",
                   avatarHue: Math.floor(Math.random() * 360),
                 })
               }
@@ -123,13 +161,13 @@ function Staff({ user, data, onLock, onBack }) {
           <StaffRoster employees={employees} onEdit={setEditEmp} onDelete={setConfirmDelete}/>
         )}
         {tab === "schedule" && (
-          <StaffSchedule employees={employees} timeEntries={data.timeEntries}/>
+          <StaffSchedule employees={employees}/>
         )}
         {tab === "hours" && (
-          <StaffHours employees={employees} historic={data.historicTimeEntries}/>
+          <StaffHours employees={employees}/>
         )}
         {tab === "payroll" && (
-          <StaffPayroll employees={employees} topEmployees={data.topEmployees}/>
+          <StaffPayroll employees={employees}/>
         )}
       </div>
 
@@ -138,6 +176,8 @@ function Staff({ user, data, onLock, onBack }) {
           employee={editEmp}
           onClose={() => setEditEmp(null)}
           onSave={saveEmployee}
+          onChangePin={changeEmployeePin}
+          onSavePermissions={savePermissions}
         />
       )}
 
@@ -245,9 +285,15 @@ function relativeHire(date) {
   return rem ? `${years}a ${rem}m` : `${years} año${years === 1 ? "" : "s"}`;
 }
 
-function StaffSchedule({ employees, timeEntries }) {
+function StaffSchedule({ employees }) {
+  const [timeEntries, setTimeEntries] = React.useState([]);
+  React.useEffect(() => {
+    timeclockApi.today().then((data) => {
+      if (data && Array.isArray(data.entries)) setTimeEntries(data.entries);
+    }).catch(() => {});
+  }, []);
   const today = new Date().toISOString().slice(0, 10);
-  const todayEntries = timeEntries.filter((t) => t.date === today);
+  const todayEntries = timeEntries;
 
   const empState = employees.map((e) => {
     const entries = todayEntries.filter((t) => t.userId === e.id);
@@ -365,10 +411,17 @@ function fmtHours(mins) {
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
-function StaffHours({ employees, historic }) {
+function StaffHours({ employees }) {
   const [range, setRange] = React.useState("week");
   const [apiSummary, setApiSummary] = React.useState(null);
+  const [historic, setHistoric] = React.useState([]);
   const today = new Date();
+
+  React.useEffect(() => {
+    timeclockApi.history({ range }).then((data) => {
+      if (Array.isArray(data?.entries)) setHistoric(data.entries);
+    }).catch(() => {});
+  }, [range]);
 
   React.useEffect(() => {
     timeclockApi.summary({ range })
@@ -586,7 +639,7 @@ function StaffHours({ employees, historic }) {
   );
 }
 
-function StaffPayroll({ employees, topEmployees }) {
+function StaffPayroll({ employees }) {
   const [period, setPeriod] = React.useState("biweek"); // "biweek" | "month"
   const [apiPayroll, setApiPayroll] = React.useState(null);
 
@@ -600,8 +653,7 @@ function StaffPayroll({ employees, topEmployees }) {
   const divisor = period === "biweek" ? 2 : 1;
   // Match topEmployees by first name for demo purposes
   const enriched = employees.map((e) => {
-    const top = topEmployees.find((t) => t.name.toLowerCase().startsWith(e.name.split(" ")[0].toLowerCase().slice(0, 4)));
-    const monthSales = top?.ventas || 0;
+    const monthSales = 0;
     const salesForPeriod = monthSales / divisor;
     const salaryForPeriod = (e.salary || 0) / divisor;
     const commissionEarned = +(salesForPeriod * e.commissionRate / 100).toFixed(2);
@@ -695,11 +747,15 @@ function StaffPayroll({ employees, topEmployees }) {
 }
 
 // ---------- Employee modal (create/edit) ----------
-function EmployeeModal({ employee, onClose, onSave }) {
+function EmployeeModal({ employee, onClose, onSave, onChangePin, onSavePermissions }) {
   const [e, setE] = React.useState(employee);
+  const [pinModal, setPinModal] = React.useState(false);
+  const [perms, setPerms] = React.useState(employee.permissions || {});
+  const [permsSaving, setPermsSaving] = React.useState(false);
   const isNew = !employee.name;
   const upd = (k, v) => setE((p) => ({ ...p, [k]: v }));
-  const valid = e.name.trim() && e.position.trim();
+  const validPin = !isNew || /^\d{4}$/.test(e.pin ?? "");
+  const valid = e.name.trim() && e.position.trim() && validPin;
 
   return (
     <div className="modal-back" onClick={onClose}>
@@ -783,6 +839,42 @@ function EmployeeModal({ employee, onClose, onSave }) {
             </div>
 
             <div className="emp-pay-section">
+              <div className="form-label" style={{ marginBottom: 10 }}>Acceso</div>
+              <div className="form-grid">
+                {isNew ? (
+                  <label className="form-row">
+                    <span className="form-label">PIN inicial (4 dígitos)</span>
+                    <input
+                      className="form-input"
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={4}
+                      placeholder="••••"
+                      value={e.pin ?? ""}
+                      onChange={(ev) => upd("pin", ev.target.value.replace(/\D/g, "").slice(0, 4))}
+                    />
+                    {!validPin && (
+                      <span style={{ fontSize: 11, color: "var(--magenta)", marginTop: 4 }}>
+                        El PIN debe tener exactamente 4 dígitos.
+                      </span>
+                    )}
+                  </label>
+                ) : (
+                  <div className="form-row">
+                    <span className="form-label">PIN de acceso</span>
+                    <button
+                      type="button"
+                      className="btn-ghost btn-sm"
+                      onClick={() => setPinModal(true)}
+                    >
+                      <Icons.Lock size={12}/> Cambiar PIN
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="emp-pay-section">
               <div className="form-label" style={{ marginBottom: 10 }}>Compensación</div>
               <div className="form-grid">
                 <label className="form-row">
@@ -809,6 +901,55 @@ function EmployeeModal({ employee, onClose, onSave }) {
                 </label>
               </div>
             </div>
+
+            {!isNew && e.role === "empleada" && (
+              <div className="emp-pay-section">
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div>
+                    <div className="form-label" style={{ marginBottom: 2 }}>Accesos adicionales</div>
+                    <div style={{ fontSize: 11, color: "var(--ink-dim)" }}>
+                      Los marcados se otorgan sobre el rol por defecto.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-primary btn-sm"
+                    disabled={permsSaving}
+                    onClick={() => {
+                      setPermsSaving(true);
+                      onSavePermissions?.(e.id, perms);
+                      setTimeout(() => setPermsSaving(false), 800);
+                    }}
+                  >
+                    <Icons.Check size={12}/> Guardar permisos
+                  </button>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {GRANTABLE_PERMS.map((p) => (
+                    <label key={p.key} className="perm-row" style={{ cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        style={{ width: 16, height: 16, accentColor: "var(--magenta)", flexShrink: 0 }}
+                        checked={perms[p.key] === true}
+                        onChange={() =>
+                          setPerms((prev) => {
+                            if (prev[p.key] === true) {
+                              const { [p.key]: _, ...rest } = prev;
+                              return rest;
+                            }
+                            return { ...prev, [p.key]: true };
+                          })
+                        }
+                      />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{p.label}</div>
+                        <div style={{ fontSize: 11, color: "var(--ink-dim)" }}>{p.desc}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -816,6 +957,79 @@ function EmployeeModal({ employee, onClose, onSave }) {
           <button className="btn-ghost" onClick={onClose}>Cancelar</button>
           <button className="btn-primary" disabled={!valid} onClick={() => onSave(e)}>
             <Icons.Check size={14}/> {isNew ? "Crear empleada" : "Guardar cambios"}
+          </button>
+        </div>
+      </div>
+
+      {pinModal && (
+        <PinChangeModal
+          name={e.name}
+          onClose={() => setPinModal(false)}
+          onConfirm={(newPin) => {
+            onChangePin?.(e.id, newPin);
+            setPinModal(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function PinChangeModal({ name, onClose, onConfirm }) {
+  const [pin, setPin] = React.useState("");
+  const [confirm, setConfirm] = React.useState("");
+  const match = pin.length === 4 && pin === confirm;
+
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" onClick={(ev) => ev.stopPropagation()} style={{ width: "min(420px, 92vw)" }}>
+        <div className="modal-head">
+          <div>
+            <div className="modal-eyebrow">Cambiar PIN</div>
+            <div className="modal-title">{name}</div>
+            <div className="modal-sub">Genera un nuevo PIN de 4 dígitos.</div>
+          </div>
+          <button className="iconbtn" onClick={onClose}>
+            <Icons.X size={16}/>
+          </button>
+        </div>
+
+        <div className="form-grid" style={{ marginTop: 12 }}>
+          <label className="form-row">
+            <span className="form-label">Nuevo PIN</span>
+            <input
+              className="form-input"
+              type="password"
+              inputMode="numeric"
+              maxLength={4}
+              autoFocus
+              value={pin}
+              onChange={(ev) => setPin(ev.target.value.replace(/\D/g, "").slice(0, 4))}
+            />
+          </label>
+          <label className="form-row">
+            <span className="form-label">Confirmar PIN</span>
+            <input
+              className="form-input"
+              type="password"
+              inputMode="numeric"
+              maxLength={4}
+              value={confirm}
+              onChange={(ev) => setConfirm(ev.target.value.replace(/\D/g, "").slice(0, 4))}
+            />
+          </label>
+        </div>
+
+        {!match && (pin || confirm) && (
+          <div style={{ fontSize: 12, color: "var(--magenta)", marginTop: 8 }}>
+            {pin.length !== 4 ? "El PIN debe tener 4 dígitos." : "Los PINs no coinciden."}
+          </div>
+        )}
+
+        <div className="modal-foot" style={{ marginTop: 18 }}>
+          <button className="btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn-primary" disabled={!match} onClick={() => onConfirm(pin)}>
+            <Icons.Check size={14}/> Guardar PIN
           </button>
         </div>
       </div>
@@ -858,12 +1072,10 @@ function ConfirmModal({ title, message, confirmLabel = "Confirmar", danger, onCl
 //   TIME CLOCK — Marcar entrada/salida
 // ============================================================
 
-function TimeClock({ user, data, onLock, onBack }) {
+function TimeClock({ user, onLock, onBack }) {
   const [now, setNow] = React.useState(new Date());
-  const [entries, setEntries] = React.useState(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    return data.timeEntries.filter((t) => t.date === today);
-  });
+  const [employees, setEmployees] = React.useState([]);
+  const [entries, setEntries] = React.useState([]);
   const [toast, setToast] = React.useState(null);
 
   React.useEffect(() => {
@@ -877,6 +1089,7 @@ function TimeClock({ user, data, onLock, onBack }) {
         if (data && Array.isArray(data.entries)) setEntries(data.entries);
       })
       .catch(() => {});
+    staffApi.list().then((items) => setEmployees(items)).catch(() => {});
   }, []);
 
   const myEntries = entries.filter((t) => t.userId === user.id);
@@ -891,16 +1104,19 @@ function TimeClock({ user, data, onLock, onBack }) {
     return s + (oh * 60 + om - (ih * 60 + im));
   }, 0);
 
+  const refreshEntries = () =>
+    timeclockApi.today()
+      .then((data) => { if (data && Array.isArray(data.entries)) setEntries(data.entries); })
+      .catch(() => {});
+
   const punchIn = async () => {
     try {
-      const newEntry = await timeclockApi.punchIn();
-      setEntries((es) => [...es, newEntry]);
-      setToast({ kind: "in", time: newEntry.in, name: user.name });
+      await timeclockApi.punchIn();
+      await refreshEntries();
+      setToast({ kind: "in", time: nowHM(), name: user.name });
       setTimeout(() => setToast(null), 3000);
     } catch (err) {
-      const msg = err.response?.status === 409
-        ? "Ya marcaste entrada hoy"
-        : apiError(err);
+      const msg = apiError(err);
       setToast({ kind: "error", time: nowHM(), name: msg });
       setTimeout(() => setToast(null), 3000);
     }
@@ -908,14 +1124,12 @@ function TimeClock({ user, data, onLock, onBack }) {
 
   const punchOut = async () => {
     try {
-      const updated = await timeclockApi.punchOut();
-      setEntries((es) => es.map((t) => (t.id === updated.id ? updated : t)));
-      setToast({ kind: "out", time: updated.out, name: user.name, started: updated.in });
+      await timeclockApi.punchOut();
+      await refreshEntries();
+      setToast({ kind: "out", time: nowHM(), name: user.name, started: openEntry?.in });
       setTimeout(() => setToast(null), 3000);
     } catch (err) {
-      const msg = err.response?.status === 409
-        ? "No hay entrada abierta para cerrar"
-        : apiError(err);
+      const msg = apiError(err);
       setToast({ kind: "error", time: nowHM(), name: msg });
       setTimeout(() => setToast(null), 3000);
     }
@@ -925,7 +1139,7 @@ function TimeClock({ user, data, onLock, onBack }) {
   const dateStr = now.toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
 
   // Other employees today for the side panel
-  const others = data.employees
+  const others = employees
     .filter((e) => e.id !== user.id && e.status === "activa")
     .map((e) => {
       const ents = entries.filter((t) => t.userId === e.id);

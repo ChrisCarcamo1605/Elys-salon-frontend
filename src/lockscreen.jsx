@@ -2,18 +2,18 @@ import { useState, useEffect } from 'react';
 import { Icons } from './icons.jsx';
 import { auth, staff as staffApi, apiError } from './api.js';
 
-function LockScreen({ users: fallbackUsers, onUnlock, reason }) {
+function LockScreen({ onUnlock, reason }) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [shake, setShake] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [hints, setHints] = useState(fallbackUsers);
+  const [hints, setHints] = useState([]);
   const [now, setNow] = useState(new Date());
 
   // Load user hints from backend; silently fall back to prop if unreachable
   useEffect(() => {
     staffApi.public()
-      .then((items) => setHints(items))
+      .then((items) => { if (Array.isArray(items)) setHints(items); })
       .catch(() => {});
   }, []);
 
@@ -53,8 +53,8 @@ function LockScreen({ users: fallbackUsers, onUnlock, reason }) {
     if (val.length !== 4 || loading) return;
     setLoading(true);
     try {
-      const { token, user } = await auth.unlock(val);
-      onUnlock({ user, token });
+      const { token, user, monthStats } = await auth.unlock(val);
+      onUnlock({ user: { ...user, monthStats }, token });
     } catch (err) {
       const status = err.response?.status;
       const msg =
