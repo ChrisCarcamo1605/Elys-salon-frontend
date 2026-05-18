@@ -3,14 +3,14 @@ import axios from 'axios';
 // Vite lee las variables desde import.meta.env
 const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
-const api = axios.create({
+const http = axios.create({
   baseURL: BASE,
 });
 
-export default api;
+export default http;
 
 // Attach JWT from memory on every request
-api.interceptors.request.use((config) => {
+http.interceptors.request.use((config) => {
   const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
