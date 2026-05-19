@@ -15,4 +15,8 @@ export default defineConfig({
   build: {
     outDir: 'dist',
   },
+  preview: {
+    host: '0.0.0.0',
+    port: parseInt(process.env.PORT) || 4173,
+  },
 })
