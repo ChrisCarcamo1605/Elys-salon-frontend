@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Icons } from './icons.jsx';
 import { TopBar } from './menu.jsx';
 import { ConfirmModal, EmployeeModal, PinChangeModal } from './staff.jsx';
-import { catalog as catalogApi, inventory as inventoryApi, goals as goalsApi, categories as categoriesApi, promotions as promotionsApi, permissions as permissionsApi, staff as staffApi, settings as settingsApi, apiError } from './api.js';
+import { catalog as catalogApi, inventory as inventoryApi, goals as goalsApi, categories as categoriesApi, promotions as promotionsApi, permissions as permissionsApi, staff as staffApi, settings as settingsApi, sales as salesApi, apiError } from './api.js';
+import { fmtMoney } from './utils.js';
 
 // Inventory, Progress, Team, Settings screens
 
@@ -151,8 +152,8 @@ function Inventory({ user, onLock, onBack }) {
                     </div>
                   </div>
                 </div>
-                <div>${p.price.toFixed(2)}</div>
-                <div style={{ color: "var(--ink-dim)" }}>${(p.cost || 0).toFixed(2)}</div>
+                <div>{fmtMoney(p.price)}</div>
+                <div style={{ color: "var(--ink-dim)" }}>{fmtMoney(p.cost || 0)}</div>
                 <div style={{ fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>{p.stock}</div>
                 <div>
                   <span className={`stock-pill ${out ? "out" : low ? "low" : "ok"}`}>
@@ -358,7 +359,7 @@ function EntryModal({ product, products, onClose, onSave }) {
           </div>
           <div>
             <div className="entry-summary-label">Inversión total</div>
-            <div className="entry-summary-val">${total.toFixed(2)}</div>
+            <div className="entry-summary-val">{fmtMoney(total)}</div>
           </div>
           <div>
             <div className="entry-summary-label">Stock final</div>
@@ -546,43 +547,71 @@ function AdjustModal({ product, onClose, onSave }) {
 //   PROGRESS — multi-goal achievements
 // ============================================================
 
+function fmtSaleDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const now = new Date();
+  const hm = d.toLocaleTimeString('es-SV', { hour: '2-digit', minute: '2-digit', hour12: false });
+  if (d.toDateString() === now.toDateString()) return `Hoy ${hm}`;
+  const yesterday = new Date(now - 864e5);
+  if (d.toDateString() === yesterday.toDateString()) return `Ayer ${hm}`;
+  return d.toLocaleDateString('es-SV', { day: 'numeric', month: 'short' });
+}
+
 function Progress({ user, onLock, onBack }) {
-  const [stats, setStats] = useState(user.monthStats || { totalSales: 0, retailSales: 0, servicesDone: 0, newClients: 0 });
+  const [stats, setStats] = useState(user.monthStats || { totalSales: 0, retailSales: 0, servicesDone: 0, newClients: 0, tipsCollected: 0 });
   const [goalsData, setGoalsData] = useState([]);
+  const [recentSales, setRecentSales] = useState([]);
 
   useEffect(() => {
     goalsApi.progress('me').then((result) => {
       setGoalsData(result.goals);
-      setStats(result.stats);
-    }).catch(() => {/* keep mock */});
+      if (result.stats != null) setStats(result.stats);
+    }).catch(() => {});
+
+    salesApi.list({ limit: 15 }).then((result) => {
+      const items = result.items ?? [];
+      const rows = [];
+      for (const sale of items) {
+        if (Array.isArray(sale.lines) && sale.lines.length > 0) {
+          for (const line of sale.lines) {
+            rows.push({
+              d: fmtSaleDate(sale.createdAt),
+              item: line.itemName ?? line.name ?? 'Venta',
+              amt: Number(line.price ?? 0) * Number(line.qty ?? 1),
+              kind: line.itemType ?? line.type ?? 'S',
+            });
+          }
+        } else {
+          rows.push({
+            d: fmtSaleDate(sale.createdAt),
+            item: 'Cobro',
+            amt: Number(sale.total ?? 0),
+            kind: 'S',
+          });
+        }
+      }
+      setRecentSales(rows.slice(0, 15));
+    }).catch(() => {});
   }, []);
 
   const goalsWithProgress = goalsData.map((g) => {
-    const value = stats[g.metric] || 0;
-    const pct = Math.min(100, (value / g.target) * 100);
-    const achieved = value >= g.target;
+    const value = g.current !== undefined ? g.current : ((stats || {})[g.metric] ?? 0);
+    const pct = g.pct !== undefined ? g.pct : Math.min(100, g.target > 0 ? (value / g.target) * 100 : 0);
+    const achieved = g.achieved !== undefined ? g.achieved : value >= g.target;
     const remaining = Math.max(0, g.target - value);
-    const earned =
+    const earned = g.earned !== undefined ? g.earned : (
       achieved && g.rewardType === "fixed"
         ? g.rewardValue
         : achieved && g.rewardType === "percent"
-        ? +(stats[g.metric] * g.rewardValue / 100).toFixed(2)
-        : 0;
+        ? +(value * g.rewardValue / 100).toFixed(2)
+        : 0
+    );
     return { ...g, value, pct, achieved, remaining, earned };
   });
 
   const totalEarned = goalsWithProgress.reduce((s, g) => s + g.earned, 0);
   const achievedCount = goalsWithProgress.filter((g) => g.achieved).length;
-
-  const recent = [
-    { d: "Hoy 14:32", item: "Manicure spa", amt: 20, kind: "S" },
-    { d: "Hoy 11:10", item: "Corte mujer + tinte raíz", amt: 53, kind: "S" },
-    { d: "Hoy 09:45", item: "Aceite de argán", amt: 15, kind: "P" },
-    { d: "Ayer 17:45", item: "Pedicure básico", amt: 15, kind: "S" },
-    { d: "Ayer 15:20", item: "Uñas acrílicas", amt: 35, kind: "S" },
-    { d: "Ayer 13:10", item: "Shampoo profesional", amt: 18, kind: "P" },
-    { d: "16 may", item: "Botox capilar", amt: 65, kind: "S" },
-  ];
 
   const toneMap = {
     magenta: { color: "#de0fab", soft: "var(--magenta-soft)" },
@@ -600,7 +629,7 @@ function Progress({ user, onLock, onBack }) {
           <div className="earn-left">
             <div className="ana-eyebrow">Pago variable · Mayo 2026</div>
             <div className="earn-hero-title">
-              Llevas <span style={{ color: "#10b981" }}>${totalEarned.toFixed(2)}</span> en bonos asegurados
+              Llevas <span style={{ color: "#10b981" }}>{fmtMoney(totalEarned)}</span> en bonos asegurados
             </div>
             <div className="earn-hero-sub">
               Has completado <b>{achievedCount}</b> de <b>{goalsData.length}</b> metas. Sigue así para desbloquear el resto.
@@ -608,19 +637,19 @@ function Progress({ user, onLock, onBack }) {
           </div>
           <div className="earn-stats">
             <div className="earn-stat">
-              <div className="earn-stat-val">${stats.totalSales.toFixed(0)}</div>
+              <div className="earn-stat-val">{fmtMoney(stats?.totalSales || 0)}</div>
               <div className="earn-stat-label">Ventas totales</div>
             </div>
             <div className="earn-stat">
-              <div className="earn-stat-val">${stats.retailSales.toFixed(0)}</div>
+              <div className="earn-stat-val">{fmtMoney(stats?.retailSales || 0)}</div>
               <div className="earn-stat-label">Productos</div>
             </div>
             <div className="earn-stat">
-              <div className="earn-stat-val">{stats.servicesDone}</div>
+              <div className="earn-stat-val">{stats?.servicesDone ?? 0}</div>
               <div className="earn-stat-label">Servicios</div>
             </div>
             <div className="earn-stat">
-              <div className="earn-stat-val">${stats.tipsCollected}</div>
+              <div className="earn-stat-val">{fmtMoney(stats?.tipsCollected || 0)}</div>
               <div className="earn-stat-label">Propinas</div>
             </div>
           </div>
@@ -678,7 +707,7 @@ function Progress({ user, onLock, onBack }) {
                   {g.achieved ? (
                     <div className="goal-earned">
                       <div className="goal-earned-label">Ganado</div>
-                      <div className="goal-earned-val">+${g.earned.toFixed(2)}</div>
+                      <div className="goal-earned-val">+{fmtMoney(g.earned)}</div>
                     </div>
                   ) : (
                     <div className="goal-remaining">
@@ -703,18 +732,23 @@ function Progress({ user, onLock, onBack }) {
               <div className="card-title">Cobros que sumaste este mes</div>
             </div>
             <div style={{ fontSize: 12, color: "var(--ink-dim)" }}>
-              {recent.length} cobros recientes
+              {recentSales.length} cobros recientes
             </div>
           </div>
           <div className="recent">
-            {recent.map((r, i) => (
+            {recentSales.length === 0 && (
+              <div style={{ padding: "28px 0", textAlign: "center", color: "var(--ink-dim)", fontSize: 13 }}>
+                Sin cobros registrados aún.
+              </div>
+            )}
+            {recentSales.map((r, i) => (
               <div className="recent-row" key={i}>
                 <div className="recent-time">{r.d}</div>
                 <span className={`pill p-${r.kind}`}>
                   {r.kind === "S" ? "Servicio" : "Producto"}
                 </span>
                 <div className="recent-item">{r.item}</div>
-                <div className="recent-amt">+${r.amt.toFixed(2)}</div>
+                <div className="recent-amt">+{fmtMoney(r.amt)}</div>
               </div>
             ))}
           </div>
@@ -768,14 +802,14 @@ function Team({ user, onLock, onBack }) {
                   <div className="team-svc">{t.servicios} servicios</div>
                 </div>
                 <div className="team-bonus">
-                  {t.bonus ? <span className="b-on">+${t.bonus}</span> : <span className="b-off">Sin bono aún</span>}
+                  {t.bonus ? <span className="b-on">+{fmtMoney(t.bonus)}</span> : <span className="b-off">Sin bono aún</span>}
                 </div>
               </div>
               <div className="team-bar">
                 <div className="team-fill" style={{width:`${t.pct}%`}}/>
               </div>
               <div className="team-meta">
-                <span>${t.ventas} / ${t.goal}</span>
+                <span>{fmtMoney(t.ventas)} / {fmtMoney(t.goal)}</span>
                 <span>{t.pct.toFixed(0)}%</span>
               </div>
             </div>
@@ -1594,7 +1628,7 @@ function CatalogItemModal({ item, categories, onClose, onSave }) {
         {+it.cost > 0 && +it.price > 0 && (
           <div className="margin-pill">
             Margen estimado: <b>{(((it.price - it.cost) / it.price) * 100).toFixed(0)}%</b>
-            {" · "}Ganancia por unidad: <b>${(it.price - it.cost).toFixed(2)}</b>
+            {" · "}Ganancia por unidad: <b>{fmtMoney(it.price - it.cost)}</b>
           </div>
         )}
 

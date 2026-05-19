@@ -5,6 +5,7 @@ import { Icons } from './icons.jsx';
 import { TopBar } from './menu.jsx';
 import { exportUtils } from './reports.jsx';
 import { staff as staffApi, timeclock as timeclockApi, payroll as payrollApi, apiError } from './api.js';
+import { fmtMoney } from './utils.js';
 
 // Permisos otorgables individualmente a empleadas
 const GRANTABLE_PERMS = [
@@ -509,11 +510,11 @@ function StaffHours({ employees }) {
         s.name, s.position, s.daysWorked,
         `${s.totalHours.toFixed(1)}h`,
         `${(s.avgMins / 60).toFixed(1)}h`,
-        `$${s.cost.toFixed(2)}`,
+        fmtMoney(s.cost),
       ]),
       totals: [
         { label: "Horas totales", value: `${totals.hours.toFixed(1)}h` },
-        { label: "Costo total",   value: `$${totals.cost.toFixed(2)}` },
+        { label: "Costo total",   value: fmtMoney(totals.cost) },
         { label: "Empleadas",     value: totals.employees },
         { label: "Promedio",      value: `${totals.avg.toFixed(1)}h` },
       ],
@@ -552,7 +553,7 @@ function StaffHours({ employees }) {
         </div>
         <div className="kpi">
           <div className="kpi-label">Costo estimado</div>
-          <div className="kpi-value">${totals.cost.toFixed(0)}</div>
+          <div className="kpi-value">{fmtMoney(totals.cost)}</div>
         </div>
         <div className="kpi">
           <div className="kpi-label">Empleadas activas</div>
@@ -599,7 +600,7 @@ function StaffHours({ employees }) {
                 <div className="hours-stat">
                   <div className="info-label">Costo</div>
                   <div className="info-val" style={{ color: "var(--magenta)" }}>
-                    ${s.cost.toFixed(0)}
+                    {fmtMoney(s.cost)}
                   </div>
                 </div>
               </div>

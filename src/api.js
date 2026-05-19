@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Vite lee las variables desde import.meta.env
-const BASE = import.meta.env.VITE_API_BASE_URL || 'https://elysalon.shop/api';
+const BASE = import.meta.env.VITE_API_BASE_URL || 'elys-salon-backend-dev.up.railway.app/api';
 
 console.log('API base URL:', BASE);
 const http = axios.create({

@@ -3,6 +3,7 @@ import { useTweaks, TweaksPanel, TweakSection, TweakToggle, TweakColor, TweakRad
 import { Icons } from './icons.jsx';
 import { LockScreen } from './lockscreen.jsx';
 import { setToken, clearToken, auth, settings as settingsApi } from './api.js';
+import { fmtMoney } from './utils.js';
 import { TopBar, MainMenu } from './menu.jsx';
 import { SaleScreen } from './sales.jsx';
 import { Analytics } from './analytics.jsx';
@@ -119,7 +120,7 @@ function App() {
     const willLock = t.lockAfterSale !== false;
     setToast({
       title: "Venta cobrada",
-      sub: `${items} ${items === 1 ? "ítem" : "ítems"} · $${total.toFixed(2)}${willLock ? " · Terminal bloqueada" : ""}`,
+      sub: `${items} ${items === 1 ? "ítem" : "ítems"} · ${fmtMoney(total)}${willLock ? " · Terminal bloqueada" : ""}`,
     });
     setTimeout(() => setToast(null), 3800);
     if (willLock) lock("Bloqueo automático tras cobro");
