@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Icons } from './icons.jsx';
 import { TopBar } from './menu.jsx';
-import { ConfirmModal } from './staff.jsx';
+import { ConfirmModal, EmployeeModal, PinChangeModal } from './staff.jsx';
 import { catalog as catalogApi, inventory as inventoryApi, goals as goalsApi, categories as categoriesApi, promotions as promotionsApi, permissions as permissionsApi, staff as staffApi, settings as settingsApi, apiError } from './api.js';
 
 // Inventory, Progress, Team, Settings screens
@@ -1859,36 +1859,100 @@ function SettingPromos({ section, onSave }) {
 
 function SettingUsers({ onSave }) {
   const [users, setUsers] = useState([]);
+  const [editEmp, setEditEmp] = useState(null);
+  const [changePinFor, setChangePinFor] = useState(null);
 
-  useEffect(() => {
-    staffApi.list().then((items) => {
-      setUsers(items);
-    }).catch(() => {});
-  }, []);
+  const loadUsers = () =>
+    staffApi.list().then((items) => setUsers(items)).catch(() => {});
+
+  useEffect(() => { loadUsers(); }, []);
+
+  const saveEmployee = (emp) => {
+    const isNew = !users.some((e) => e.id === emp.id);
+    const apiCall = isNew ? staffApi.create(emp) : staffApi.update(emp.id, emp);
+    apiCall
+      .then((saved) => {
+        setUsers((es) => {
+          const idx = es.findIndex((e) => e.id === saved.id);
+          if (idx === -1) return [...es, saved];
+          const copy = [...es]; copy[idx] = saved; return copy;
+        });
+        setEditEmp(null);
+        onSave("Cambios guardados");
+      })
+      .catch((err) => onSave(`Error: ${apiError(err)}`));
+  };
+
+  const changePin = (id, pin) => {
+    staffApi.changePin(id, pin)
+      .then(() => { setChangePinFor(null); onSave("PIN actualizado"); })
+      .catch((err) => onSave(`Error: ${apiError(err)}`));
+  };
+
+  const savePermissions = (id, permissions) => {
+    staffApi.updatePermissions(id, { permissions })
+      .then((saved) => {
+        setUsers((es) => {
+          const idx = es.findIndex((e) => e.id === saved.id);
+          if (idx === -1) return es;
+          const copy = [...es]; copy[idx] = saved; return copy;
+        });
+        onSave("Permisos actualizados");
+      })
+      .catch((err) => onSave(`Error: ${apiError(err)}`));
+  };
+
+  const pinUser = users.find((u) => u.id === changePinFor);
 
   return (
-    <div className="set-card">
-      <div className="users-list">
-        {users.map((u) => (
-          <div className="users-row" key={u.id}>
-            <div className="avatar lg" style={{ background: u.color }}>{u.initials}</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600 }}>{u.name}</div>
-              <div style={{ fontSize: 12, color: "var(--ink-dim)" }}>
-                {u.role === "admin" ? "Administradora" : "Empleada"} · PIN ●●●●
+    <>
+      <div className="set-card">
+        <div className="users-list">
+          {users.map((u) => (
+            <div className="users-row" key={u.id}>
+              <div className="avatar lg" style={{ background: u.color }}>{u.initials}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600 }}>{u.name}</div>
+                <div style={{ fontSize: 12, color: "var(--ink-dim)" }}>
+                  {u.role === "admin" ? "Administradora" : "Empleada"} · PIN ●●●●
+                </div>
               </div>
+              <button className="btn-ghost btn-sm" onClick={() => setChangePinFor(u.id)}>Cambiar PIN</button>
+              <button className="btn-ghost btn-sm" onClick={() => setEditEmp(u)}>Editar</button>
             </div>
-            <button className="btn-ghost btn-sm">Cambiar PIN</button>
-            <button className="btn-ghost btn-sm">Editar</button>
-          </div>
-        ))}
+          ))}
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <button className="btn-primary" onClick={() => setEditEmp({
+            id: `u_new_${Date.now()}`, name: "", position: "", role: "empleada",
+            status: "activa", hireDate: new Date().toISOString().slice(0, 10),
+            phone: "", email: "", birthday: "", schedule: "",
+            payType: "salario", salary: 0, commissionRate: 0, pin: "",
+            avatarHue: Math.floor(Math.random() * 360),
+          })}>
+            <Icons.Plus size={14}/> Agregar usuario
+          </button>
+        </div>
       </div>
-      <div style={{ marginTop: 14 }}>
-        <button className="btn-primary">
-          <Icons.Plus size={14}/> Agregar usuario
-        </button>
-      </div>
-    </div>
+
+      {editEmp && (
+        <EmployeeModal
+          employee={editEmp}
+          onClose={() => setEditEmp(null)}
+          onSave={saveEmployee}
+          onChangePin={changePin}
+          onSavePermissions={savePermissions}
+        />
+      )}
+
+      {pinUser && (
+        <PinChangeModal
+          name={pinUser.name}
+          onClose={() => setChangePinFor(null)}
+          onConfirm={(pin) => changePin(pinUser.id, pin)}
+        />
+      )}
+    </>
   );
 }
 

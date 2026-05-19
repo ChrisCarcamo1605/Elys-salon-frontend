@@ -45,7 +45,12 @@ function TopBar({ user, title, onLock, onLogout, onBack, right }) {
 }
 
 // Main menu — large cards. Items visible depend on role or explicit permission.
-function MainMenu({ user, onNav, onLock, onLogout }) {
+function MainMenu({ user, onNav, onLock, onLogout, lockTimeoutSec = 120 }) {
+  const lockLabel = lockTimeoutSec < 60
+    ? `${lockTimeoutSec}s`
+    : lockTimeoutSec % 60 === 0
+      ? `${lockTimeoutSec / 60} min`
+      : `${Math.floor(lockTimeoutSec / 60)} min ${lockTimeoutSec % 60}s`;
   const allItems = [
     {
       id: "sale",
@@ -155,7 +160,7 @@ function MainMenu({ user, onNav, onLock, onLogout }) {
 
         <div className="menu-foot">
           <div className="menu-foot-stat">
-            <Icons.Clock size={14} /> Auto-bloqueo en 2 min de inactividad
+            <Icons.Clock size={14} /> Auto-bloqueo en {lockLabel} de inactividad
           </div>
           <div className="menu-foot-stat">
             <Icons.Sparkle size={14} /> {new Date().toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })}

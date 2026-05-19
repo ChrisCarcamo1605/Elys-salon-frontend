@@ -1321,4 +1321,4 @@ function TimeClock({ user, onLock, onBack }) {
   );
 }
 
-export { Staff, TimeClock, ConfirmModal };
+export { Staff, TimeClock, ConfirmModal, EmployeeModal, PinChangeModal };

@@ -202,6 +202,7 @@ function App() {
           onLock={lockBtn}
           onBack={() => setRoute("menu")}
           onComplete={completeSale}
+          lockAfterSale={t.lockAfterSale}
         />
       );
       break;
@@ -233,6 +234,7 @@ function App() {
           onNav={setRoute}
           onLock={lockBtn}
           onLogout={() => lock("Sesión cerrada")}
+          lockTimeoutSec={t.lockTimeoutSec}
         />
       );
   }

@@ -320,6 +320,7 @@ function toCreateSaleBody(s) {
       ? Number(l.discount.value)
       : (l.discountValue != null ? Number(l.discountValue) : undefined),
     discountById: l.discount?.byId ?? l.discountById,
+    promoId: l.discount?.promoId ?? l.promoId ?? undefined,
   }));
 
   const subtotal = lines.reduce((acc, l) => acc + (Number(l.basePrice) * Number(l.qty)), 0);
@@ -663,22 +664,28 @@ function fromKpis(raw) {
   };
 }
 
+// Build query params: accepts string range OR {range?, from?, to?}
+function toAnalyticsParams(p) {
+  if (!p || typeof p === 'string') return p ? { range: p } : { range: '30d' };
+  return p;
+}
+
 export const analytics = {
-  /** Ventas/costos/utilidad por día. range ej: '30d' */
-  salesByDay: (range = '30d') =>
-    http.get('/analytics/sales-by-day', { params: { range } }).then((r) => ({
+  /** Ventas/costos/utilidad por día. range '30d' | 'today' | {from,to} */
+  salesByDay: (params = '30d') =>
+    http.get('/analytics/sales-by-day', { params: toAnalyticsParams(params) }).then((r) => ({
       items: fromSalesByDay(Array.isArray(r.data) ? r.data : r.data?.items),
     })),
 
   /** Mix por categoría (pie chart) */
-  categoryRevenue: (range = '30d') =>
-    http.get('/analytics/category-revenue', { params: { range } }).then((r) => ({
+  categoryRevenue: (params = '30d') =>
+    http.get('/analytics/category-revenue', { params: toAnalyticsParams(params) }).then((r) => ({
       items: fromCategoryRevenue(Array.isArray(r.data) ? r.data : r.data?.items),
     })),
 
   /** Top empleadas por ventas */
-  topEmployees: (range = '30d') =>
-    http.get('/analytics/top-employees', { params: { range } }).then((r) => ({
+  topEmployees: (params = '30d') =>
+    http.get('/analytics/top-employees', { params: toAnalyticsParams(params) }).then((r) => ({
       items: fromTopEmployees(Array.isArray(r.data) ? r.data : r.data?.items),
     })),
 
@@ -689,8 +696,8 @@ export const analytics = {
     })),
 
   /** KPIs con deltas vs periodo anterior */
-  kpis: (range = '30d') =>
-    http.get('/analytics/kpis', { params: { range } }).then((r) => fromKpis(r.data)),
+  kpis: (params = '30d') =>
+    http.get('/analytics/kpis', { params: toAnalyticsParams(params) }).then((r) => fromKpis(r.data)),
 };
 
 // ─── Reportes (backend-side, opcionales) ─────────────────────────────────────

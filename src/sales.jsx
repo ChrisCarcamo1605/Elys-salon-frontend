@@ -12,7 +12,7 @@ function parsePromoOff(off) {
   return null;
 }
 
-function SaleScreen({ user, onLock, onBack, onComplete }) {
+function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) {
   const isAdmin = user.role === "admin";
   const canDiscount = isAdmin || user.permissions?.['tickets.discount'] === true;
   const [items, setItems] = React.useState([]);
@@ -65,6 +65,7 @@ function SaleScreen({ user, onLock, onBack, onComplete }) {
           saved: +(basePrice - price).toFixed(2),
           promoName: promo.name,
           promoOff: promo.off,
+          promoId: promo.id,
         };
       }
       return [
@@ -422,6 +423,7 @@ function SaleScreen({ user, onLock, onBack, onComplete }) {
           loading={loading}
           onClose={() => setPayOpen(false)}
           onFinish={finishSale}
+          lockAfterSale={lockAfterSale}
         />
       )}
     </div>
@@ -525,7 +527,7 @@ function DiscountModal({ line, onClose, onApply, onClear }) {
   );
 }
 
-function PaymentModal({ total, loading, onClose, onFinish }) {
+function PaymentModal({ total, loading, onClose, onFinish, lockAfterSale = true }) {
   const [cash, setCash] = React.useState(total);
   const [card, setCard] = React.useState(0);
   const sum = +(+cash + +card).toFixed(2);
@@ -619,13 +621,15 @@ function PaymentModal({ total, loading, onClose, onFinish }) {
             disabled={!ok || loading}
             onClick={() => onFinish(cash, card)}
           >
-            <Icons.Check size={14} /> Cobrar y bloquear
+            <Icons.Check size={14} /> {lockAfterSale ? "Cobrar y bloquear" : "Cobrar"}
           </button>
         </div>
 
-        <div className="pay-foot">
-          <Icons.Lock size={11} /> Al cobrar, la terminal se bloquea automáticamente.
-        </div>
+        {lockAfterSale && (
+          <div className="pay-foot">
+            <Icons.Lock size={11} /> Al cobrar, la terminal se bloquea automáticamente.
+          </div>
+        )}
       </div>
     </div>
   );

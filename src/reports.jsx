@@ -2,7 +2,7 @@
 import React from 'react';
 import { Icons } from './icons.jsx';
 import { TopBar } from './menu.jsx';
-import { alerts as alertsApi, promotions as promotionsApi, reports as reportsApi, downloadBlob, apiError, analytics as analyticsApi, catalog as catalogApi, staff as staffApi, timeclock as timeclockApi } from './api.js';
+import { alerts as alertsApi, promotions as promotionsApi, reports as reportsApi, downloadBlob, apiError, analytics as analyticsApi, catalog as catalogApi, staff as staffApi, timeclock as timeclockApi, settings as settingsApi } from './api.js';
 
 // ============================================================
 //   EXPORT UTILITIES
@@ -219,6 +219,12 @@ const exportUtils = (function () {
       dateStyle: "long",
       timeStyle: "short",
     });
+    const biz = cfg.business || {};
+    const bizName    = biz.name    || "Ely's Salón";
+    const bizAddress = biz.address || "";
+    const bizEmail   = biz.email   || "";
+    const bizPhone   = biz.phone   || "";
+    const bizContact = [bizAddress, bizPhone, bizEmail].filter(Boolean).join(" · ");
 
     // Normalize to "sections" array
     const sections = cfg.sections
@@ -311,8 +317,8 @@ const exportUtils = (function () {
   </div>
   <div class="head">
     <div>
-      <div class="brand">Ely's <span>Salón</span></div>
-      <div style="font-size: 10px; color: #666;">Av. Hidalgo 124, Torreón · contacto@elyssalon.mx</div>
+      <div class="brand">${bizName}</div>
+      ${bizContact ? `<div style="font-size: 10px; color: #666;">${bizContact}</div>` : ""}
     </div>
     <div class="meta">
       Generado: ${today}<br>
@@ -941,6 +947,7 @@ function OfferEditModal({ slow, onClose, onSave }) {
 function ReportsPanel({ onAction }) {
   const fmtToday = new Date().toISOString().slice(0, 10);
   const [apiData, setApiData] = React.useState({ salesByDay: [], catalog: [], employees: [], categoryRevenue: [], historicTimeEntries: [], topEmployees: [] });
+  const [business, setBusiness] = React.useState({});
 
   React.useEffect(() => {
     Promise.allSettled([
@@ -950,15 +957,19 @@ function ReportsPanel({ onAction }) {
       analyticsApi.categoryRevenue('30d'),
       timeclockApi.history({ range: 'month' }),
       analyticsApi.topEmployees('30d'),
-    ]).then(([salesRes, catalogRes, staffRes, catRes, timeRes, topRes]) => {
+      settingsApi.get(),
+    ]).then(([salesRes, catalogRes, staffRes, catRes, timeRes, topRes, settingsRes]) => {
       setApiData({
         salesByDay: salesRes.status === 'fulfilled' ? (salesRes.value.items ?? []) : [],
         catalog: catalogRes.status === 'fulfilled' ? (catalogRes.value.items ?? []) : [],
         employees: staffRes.status === 'fulfilled' ? (staffRes.value ?? []) : [],
         categoryRevenue: catRes.status === 'fulfilled' ? (catRes.value.items ?? []) : [],
-        historicTimeEntries: timeRes.status === 'fulfilled' ? (timeRes.value.entries ?? []) : [],
+        historicTimeEntries: timeRes.status === 'fulfilled' ? (Array.isArray(timeRes.value) ? timeRes.value : (timeRes.value?.entries ?? [])) : [],
         topEmployees: topRes.status === 'fulfilled' ? (topRes.value.items ?? []) : [],
       });
+      if (settingsRes.status === 'fulfilled') {
+        setBusiness(settingsRes.value?.business ?? {});
+      }
     });
   }, []);
 
@@ -993,6 +1004,7 @@ function ReportsPanel({ onAction }) {
           { color: "#7b2cbf" }
         );
         exportUtils.printReport({
+          business,
           title: "Reporte de ventas",
           subtitle: `Detalle día por día · Últimos ${data.salesByDay.length} días`,
           charts: [lineChart, ticketsBar],
@@ -1059,6 +1071,7 @@ function ReportsPanel({ onAction }) {
         );
 
         exportUtils.printReport({
+          business,
           title: "Reporte de inventario",
           subtitle: `Stock retail al ${new Date().toLocaleDateString("es-MX", { dateStyle: "long" })}`,
           charts: [stockPie, valueBar],
@@ -1132,6 +1145,7 @@ function ReportsPanel({ onAction }) {
         ]);
 
         exportUtils.printReport({
+          business,
           title: "Reporte de nómina quincenal",
           subtitle: `Pago variable y fijo · quincena que termina ${new Date().toLocaleDateString("es-MX", { dateStyle: "long" })}`,
           charts: [payrollBar, breakdownPie],
@@ -1218,6 +1232,7 @@ function ReportsPanel({ onAction }) {
 
         const last7 = data.historicTimeEntries.slice(-50);
         exportUtils.printReport({
+          business,
           title: "Reporte de asistencia",
           subtitle: "Últimos 60 días — horas trabajadas y marcas recientes",
           charts: [lineChart, empBar],
@@ -1263,6 +1278,7 @@ function ReportsPanel({ onAction }) {
           data.categoryRevenue.map((c) => ({ label: c.name, value: c.value, color: c.color }))
         );
         exportUtils.printReport({
+          business,
           title: "Top categorías del mes",
           subtitle: "Ingresos por línea de servicio",
           charts: [pie, bar],
@@ -1376,6 +1392,7 @@ function ReportsPanel({ onAction }) {
         ], { height: 180 });
 
         exportUtils.printReport({
+          business,
           docTitle: "Reporte Ejecutivo",
           docSubtitle: `Resumen completo del salón · ${new Date().toLocaleDateString("es-MX", { dateStyle: "long" })}`,
           sections: [
