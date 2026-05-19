@@ -7,7 +7,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: process.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:3001',
+        target: process.env.VITE_API_BASE_URL?.replace('/api', '') || 'https://elysalon.shop/api',
         changeOrigin: true,
       },
     },
