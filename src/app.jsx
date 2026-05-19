@@ -123,6 +123,7 @@ function App() {
     });
     setTimeout(() => setToast(null), 3800);
     if (willLock) lock("Bloqueo automático tras cobro");
+    else setRoute("menu");
   };
 
   const TweaksUI = (

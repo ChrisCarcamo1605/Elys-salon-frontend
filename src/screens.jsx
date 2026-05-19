@@ -1968,7 +1968,7 @@ function SettingRoles({ section, onSave }) {
       setUsers(items);
       if (items.length > 0 && !selectedUserId) setSelectedUserId(items[0].id);
       const o = {};
-      items.forEach((u) => { o[u.id] = { role: u.role, perms: {} }; });
+      items.forEach((u) => { o[u.id] = { role: u.role, perms: u.permissions || {} }; });
       setUserOverrides(o);
     }).catch(() => {});
     permissionsApi.matrix().then((matrix) => {
