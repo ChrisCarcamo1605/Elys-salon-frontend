@@ -7,7 +7,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: process.env.VITE_API_BASE_URL || 'https://elysalon.shop/api',
+        target: import.meta.env.VITE_API_BASE_URL|| 'https://elysalon.shop/api',
         changeOrigin: true,
       },
     },
@@ -17,7 +17,7 @@ export default defineConfig({
   },
   preview: {
     host: '0.0.0.0',
-    port: parseInt(process.env.PORT) || 4173,
+    port: parseInt(import.meta.env.PORT) || 4173,
     allowedHosts: ['elysalon.shop', 'react-frontend-dev-c187.up.railway.app'],
 
   },
