@@ -28,7 +28,7 @@ const writeCookie = (obj) => {
 };
 
 const TWEAK_DEFAULTS = {
-  "darkMode": false,
+  "darkMode": true,
   "accent": "#de0fab",
   "density": "comfortable",
   "lockTimeoutSec": 120,
@@ -107,6 +107,13 @@ function App() {
     window.addEventListener('elys:session-expired', onExpired);
     return () => window.removeEventListener('elys:session-expired', onExpired);
   }, []);
+
+  // Dark mode toggle from TopBar button
+  useEffect(() => {
+    const handler = () => setTweak("darkMode", document.documentElement.dataset.theme !== "dark");
+    window.addEventListener('elys:toggle-dark', handler);
+    return () => window.removeEventListener('elys:toggle-dark', handler);
+  }, [setTweak]);
 
   const lock = (reason = "") => {
     auth.lock(); // auditoría en backend, fire-and-forget

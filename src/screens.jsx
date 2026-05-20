@@ -939,7 +939,7 @@ const DEFAULT_SECTIONS = [
 function Settings({ user, onLock, onBack }) {
   const [sections, setSections] = useState(DEFAULT_SECTIONS);
   const [activeId, setActiveId] = useState(DEFAULT_SECTIONS[0].id);
-  const [navOpen, setNavOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(() => typeof window !== 'undefined' && window.innerWidth > 840);
   const [toast, setToast] = useState(null);
   const groups = [...new Set(sections.map((s) => s.group))];
   const active = sections.find((s) => s.id === activeId);
@@ -1019,7 +1019,7 @@ function Settings({ user, onLock, onBack }) {
                     <button
                       key={s.id}
                       className={`settings-nav-item ${activeId === s.id ? "active" : ""}`}
-                      onClick={() => setActiveId(s.id)}
+                      onClick={() => { setActiveId(s.id); if (window.innerWidth <= 840) setNavOpen(false); }}
                     >
                       <div className="settings-nav-ico">
                         <IconComp size={14}/>

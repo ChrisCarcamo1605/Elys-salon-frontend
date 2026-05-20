@@ -10,7 +10,6 @@ function LockScreen({ onUnlock, reason }) {
   const [hints, setHints] = useState([]);
   const [now, setNow] = useState(new Date());
 
-  // Load user hints from backend; silently fall back to prop if unreachable
   useEffect(() => {
     staffApi.public()
       .then((items) => { if (Array.isArray(items)) setHints(items); })
@@ -79,48 +78,40 @@ function LockScreen({ onUnlock, reason }) {
 
   return (
     <div className="lock-root">
-      <div className="lock-side">
-        <div className="lock-side-top">
-          <div className="lock-clock">{timeStr}</div>
-          <div className="lock-date">{dateStr}</div>
-
-          <div className="lock-tagline">
-            <div className="lock-tagline-eyebrow">
-              <Icons.Sparkle size={11}/> Ely's Salón
-            </div>
-            <div className="lock-tagline-text">
-              Belleza profesional, <b>desde el primer detalle.</b>
-            </div>
+      {/* Desktop top status bar */}
+      <div className="lock-statusbar">
+        <div className="lock-statusbar-brand">
+          <div className="lock-statusbar-logo">
+            <img src="/assets/logo.jpg" alt="" />
           </div>
+          <span>Ely's <span className="lock-statusbar-accent">Salón</span></span>
         </div>
-
-        <div className="lock-hints">
-          <div className="lock-hint-title">Usuarios disponibles</div>
-          {hints.map((u) => (
-            <div className="lock-hint" key={u.id}>
-              <div className="lock-hint-avatar" style={{ background: u.color }}>
-                {u.initials}
-              </div>
-              <div>
-                <div className="lock-hint-name">{u.name}</div>
-                <div className="lock-hint-role">
-                  {u.role === "admin" ? "Administradora" : "Empleada"}
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="lock-statusbar-time">
+          <span>{timeStr}</span>
+          <span>·</span>
+          <span>{dateStr}</span>
         </div>
       </div>
 
-      <div className="lock-card">
-        <div className="lock-logo">
+      {/* Mobile-only header shown above the card */}
+      <div className="lock-above-card">
+        <div className="lock-logo lock-logo-lg">
           <img src="/assets/logo.jpg" alt="Ely's Salón" />
         </div>
-        <div className="lock-brand-name">
-          <span style={{ color: "#26c6da" }}>Ely's</span>{" "}
-          <span style={{ color: "var(--magenta)" }}>Salón</span>
-        </div>
+        <div className="lock-title">Bienvenida de vuelta</div>
         <div className="lock-sub">Ingresa tu PIN para continuar</div>
+      </div>
+
+      {/* Main glass card */}
+      <div className="lock-card">
+        {/* Inside card: logo + heading for desktop */}
+        <div className="lock-card-header">
+          <div className="lock-logo">
+            <img src="/assets/logo.jpg" alt="Ely's Salón" />
+          </div>
+          <div className="lock-title">Bienvenida de vuelta</div>
+          <div className="lock-sub">Ingresa tu PIN para continuar</div>
+        </div>
 
         {reason && <div className="lock-reason">{reason}</div>}
 
@@ -151,11 +142,25 @@ function LockScreen({ onUnlock, reason }) {
 
         <div className="lock-foot">
           {loading
-            ? <><Icons.Clock size={14}/> Verificando…</>
-            : <><Icons.Lock size={14}/> Sesión bloqueada · Salón cerrado</>
+            ? <><Icons.Clock size={13}/> Verificando…</>
+            : <><span className="lock-foot-dot"/>{" "}Terminal segura · Auto-bloqueo activo</>
           }
         </div>
       </div>
+
+      {/* Desktop bottom user pills */}
+      {hints.length > 0 && (
+        <div className="lock-pills">
+          {hints.map((u) => (
+            <div className="lock-pill" key={u.id}>
+              <div className="lock-pill-avatar" style={{ background: u.color }}>
+                {u.initials}
+              </div>
+              <span className="lock-pill-name">{u.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
