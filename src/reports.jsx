@@ -3,6 +3,7 @@ import React from 'react';
 import { Icons } from './icons.jsx';
 import { TopBar } from './menu.jsx';
 import { alerts as alertsApi, promotions as promotionsApi, reports as reportsApi, downloadBlob, apiError, analytics as analyticsApi, catalog as catalogApi, staff as staffApi, timeclock as timeclockApi, settings as settingsApi } from './api.js';
+import { fmtMoney } from './utils.js';
 
 // ============================================================
 //   EXPORT UTILITIES
@@ -767,16 +768,16 @@ function AlertsPanel({ onNav, onAction }) {
                   <div className="offer-preview">
                     <div className="offer-label">Oferta sugerida</div>
                     <div className="offer-prices">
-                      <span className="offer-from">${basePrice}</span>
+                      <span className="offer-from">{fmtMoney(basePrice)}</span>
                       <Icons.ArrowRight size={11}/>
-                      <span className="offer-to">${offerPrice.toFixed(2)}</span>
+                      <span className="offer-to">{fmtMoney(offerPrice)}</span>
                       <span className="offer-tag">
                         {s.suggested.kind === "amount"
-                          ? `-$${s.suggested.value}`
+                          ? `-${fmtMoney(s.suggested.value)}`
                           : `-${s.suggested.value}%`}
                       </span>
                     </div>
-                    <div className="offer-saving">Ahorra ${saving}</div>
+                    <div className="offer-saving">Ahorra {fmtMoney(saving)}</div>
                   </div>
 
                   <div className="offer-actions">
@@ -816,7 +817,7 @@ function AlertsPanel({ onNav, onAction }) {
                           });
                           onAction({
                             title: "Oferta en línea",
-                            sub: `${s.name} · ${s.suggested.kind === "amount" ? `-$${s.suggested.value}` : `-${s.suggested.value}%`}`,
+                            sub: `${s.name} · ${s.suggested.kind === "amount" ? `-${fmtMoney(s.suggested.value)}` : `-${s.suggested.value}%`}`,
                           });
                         }}
                       >
@@ -909,7 +910,7 @@ function OfferEditModal({ slow, onClose, onSave }) {
           <div className="disc-quick">
             {quick.map((q) => (
               <button key={q} onClick={() => setValue(q)}>
-                {kind === "amount" ? `$${q}` : `${q}%`}
+                {kind === "amount" ? fmtMoney(q) : `${q}%`}
               </button>
             ))}
           </div>
@@ -923,10 +924,10 @@ function OfferEditModal({ slow, onClose, onSave }) {
           <Icons.ArrowRight size={18}/>
           <div>
             <div className="dp-label">Cliente paga</div>
-            <div className="dp-new">${preview.toFixed(2)}</div>
+            <div className="dp-new">{fmtMoney(preview)}</div>
           </div>
           <div className="dp-saved">
-            Ahorra <b>${(basePrice - preview).toFixed(2)}</b>
+            Ahorra <b>{fmtMoney(basePrice - preview)}</b>
           </div>
         </div>
 
@@ -1016,13 +1017,13 @@ function ReportsPanel({ onAction }) {
             { label: "Tickets", align: "right" },
           ],
           rows: data.salesByDay.map((d) => [
-            d.date, `$${d.ventas.toLocaleString()}`, `$${d.costos.toLocaleString()}`, `$${d.utilidad.toLocaleString()}`, d.tickets,
+            d.date, fmtMoney(d.ventas), fmtMoney(d.costos), fmtMoney(d.utilidad), d.tickets,
           ]),
           totals: [
-            { label: "Ventas totales", value: `$${total.toLocaleString()}` },
-            { label: "Utilidad",       value: `$${profit.toLocaleString()}` },
+            { label: "Ventas totales", value: fmtMoney(total) },
+            { label: "Utilidad",       value: fmtMoney(profit) },
             { label: "Tickets",        value: tickets },
-            { label: "Ticket promedio",value: `$${(total / tickets).toFixed(2)}` },
+            { label: "Ticket promedio",value: fmtMoney(total / tickets) },
           ],
         });
         onAction({ title: "Reporte PDF abierto", sub: "Usa el botón Imprimir/PDF" });
@@ -1086,13 +1087,13 @@ function ReportsPanel({ onAction }) {
           ],
           rows: products.map((p) => [
             p.sku || p.id, p.name, p.brand || "—",
-            `$${p.price}`, p.stock,
-            `$${(p.price * (p.stock || 0)).toFixed(2)}`,
+            fmtMoney(p.price), p.stock,
+            fmtMoney(p.price * (p.stock || 0)),
             p.stock === 0 ? "Sin stock" : (p.stock < (p.stockMin || 8) ? "Bajo" : "OK"),
           ]),
           totals: [
-            { label: "Valor inventario", value: `$${totalValue.toLocaleString()}` },
-            { label: "Costo total",      value: `$${totalCost.toLocaleString()}` },
+            { label: "Valor inventario", value: fmtMoney(totalValue) },
+            { label: "Costo total",      value: fmtMoney(totalCost) },
             { label: "SKUs",             value: products.length },
             { label: "Stock bajo",       value: lowStock },
           ],
@@ -1160,15 +1161,15 @@ function ReportsPanel({ onAction }) {
           ],
           rows: rows.map((r) => [
             r.name, r.position,
-            `$${r.salesQ.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
-            `$${r.salaryQ.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
-            `$${r.com.toFixed(2)}`,
-            `$${r.bonus.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
-            `$${r.total.toFixed(2)}`,
+            fmtMoney(r.salesQ),
+            fmtMoney(r.salaryQ),
+            fmtMoney(r.com),
+            fmtMoney(r.bonus),
+            fmtMoney(r.total),
           ]),
           totals: [
-            { label: "Total quincena", value: `$${grandTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}` },
-            { label: "Total mensual",  value: `$${(grandTotal * 2).toLocaleString(undefined, { maximumFractionDigits: 0 })}` },
+            { label: "Total quincena", value: fmtMoney(grandTotal) },
+            { label: "Total mensual",  value: fmtMoney(grandTotal * 2) },
             { label: "Empleadas",      value: rows.length },
           ],
         });
@@ -1289,10 +1290,10 @@ function ReportsPanel({ onAction }) {
           ],
           rows: data.categoryRevenue.map((c) => [
             c.name,
-            `$${c.value.toLocaleString()}`,
+            fmtMoney(c.value),
             `${((c.value / total) * 100).toFixed(1)}%`,
           ]),
-          totals: [{ label: "Ingresos totales", value: `$${total.toLocaleString()}` }],
+          totals: [{ label: "Ingresos totales", value: fmtMoney(total) }],
         });
         onAction({ title: "Reporte PDF abierto", sub: "Usa el botón Imprimir/PDF" });
       },
@@ -1405,15 +1406,15 @@ function ReportsPanel({ onAction }) {
                 { label: "Valor", align: "right" },
               ],
               rows: [
-                ["Ventas totales",  `$${total.toLocaleString()}`],
-                ["Utilidad neta",   `$${profit.toLocaleString()}`],
+                ["Ventas totales",  fmtMoney(total)],
+                ["Utilidad neta",   fmtMoney(profit)],
                 ["Margen",          `${margin}%`],
                 ["Tickets",         tickets],
-                ["Ticket promedio", `$${(tickets > 0 ? total / tickets : 0).toFixed(2)}`],
+                ["Ticket promedio", fmtMoney(tickets > 0 ? total / tickets : 0)],
               ],
               totals: [
-                { label: "Ventas",       value: `$${total.toLocaleString()}` },
-                { label: "Utilidad",     value: `$${profit.toLocaleString()}` },
+                { label: "Ventas",       value: fmtMoney(total) },
+                { label: "Utilidad",     value: fmtMoney(profit) },
                 { label: "Margen",       value: `${margin}%` },
                 { label: "Tickets",      value: tickets },
               ],
@@ -1431,7 +1432,7 @@ function ReportsPanel({ onAction }) {
                 ? lowStock.map((p) => [p.name, p.stock || 0, (p.stock || 0) === 0 ? "Sin stock" : "Bajo"])
                 : [["✓ Sin alertas de stock", "—", "OK"]],
               totals: [
-                { label: "Valor inventario", value: `$${totalValue.toLocaleString()}` },
+                { label: "Valor inventario", value: fmtMoney(totalValue) },
                 { label: "SKUs",             value: products.length },
                 { label: "Stock bajo",       value: lowStock.length },
               ],
@@ -1447,13 +1448,13 @@ function ReportsPanel({ onAction }) {
               ],
               rows: categoryRevenue.map((c) => [
                 c.name,
-                `$${(c.value || 0).toLocaleString()}`,
+                fmtMoney(c.value || 0),
                 `${catTotal > 0 ? (((c.value || 0) / catTotal) * 100).toFixed(1) : "0.0"}%`,
               ]),
             },
             {
               title: "4. Nómina del mes",
-              subtitle: `${payroll.length} empleadas · pago total $${payrollTotal.toLocaleString()}`,
+              subtitle: `${payroll.length} empleadas · pago total ${fmtMoney(payrollTotal)}`,
               chart: payrollBar,
               columns: [
                 { label: "Empleada" },
@@ -1466,13 +1467,13 @@ function ReportsPanel({ onAction }) {
               ],
               rows: payroll.map((r) => [
                 r.name, r.position,
-                `$${(r.sales || 0).toLocaleString()}`,
-                `$${(r.salary || 0).toLocaleString()}`,
-                `$${(r.com || 0).toFixed(2)}`,
-                `$${r.bonus || 0}`,
-                `$${(r.total || 0).toFixed(2)}`,
+                fmtMoney(r.sales || 0),
+                fmtMoney(r.salary || 0),
+                fmtMoney(r.com || 0),
+                fmtMoney(r.bonus || 0),
+                fmtMoney(r.total || 0),
               ]),
-              totals: [{ label: "Total a pagar", value: `$${payrollTotal.toLocaleString()}` }],
+              totals: [{ label: "Total a pagar", value: fmtMoney(payrollTotal) }],
             },
             {
               title: "5. Asistencia",

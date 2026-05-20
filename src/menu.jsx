@@ -1,7 +1,20 @@
 // Top app bar shared across screens
+import { useState, useEffect } from 'react';
 import { Icons } from './icons.jsx';
 
 function TopBar({ user, title, onLock, onLogout, onBack, right }) {
+  const [dark, setDark] = useState(() => document.documentElement.dataset.theme === "dark");
+
+  useEffect(() => {
+    const obs = new MutationObserver(() => {
+      setDark(document.documentElement.dataset.theme === "dark");
+    });
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => obs.disconnect();
+  }, []);
+
+  const toggleDark = () => window.dispatchEvent(new CustomEvent("elys:toggle-dark"));
+
   return (
     <header className="topbar">
       <div className="topbar-left">
@@ -33,12 +46,17 @@ function TopBar({ user, title, onLock, onLogout, onBack, right }) {
             </div>
           </div>
         </div>
+        <button className="iconbtn" onClick={toggleDark} title={dark ? "Modo claro" : "Modo oscuro"}>
+          {dark ? <Icons.Sun size={18} /> : <Icons.Moon size={18} />}
+        </button>
         <button className="iconbtn" onClick={onLock} title="Bloquear">
           <Icons.Lock size={18} />
         </button>
-        <button className="iconbtn" onClick={onLogout} title="Cerrar sesión">
-          <Icons.Logout size={18} />
-        </button>
+        {onLogout && (
+          <button className="iconbtn" onClick={onLogout} title="Cerrar sesión">
+            <Icons.Logout size={18} />
+          </button>
+        )}
       </div>
     </header>
   );

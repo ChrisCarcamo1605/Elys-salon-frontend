@@ -2,6 +2,7 @@ import React from 'react';
 import { Icons } from './icons.jsx';
 import { TopBar } from './menu.jsx';
 import { catalog as catalogApi, sales as salesApi, apiError } from './api.js';
+import { fmtMoney } from './utils.js';
 
 function parsePromoOff(off) {
   if (!off) return null;
@@ -247,17 +248,17 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
                       <div className="prod-price">
                         {promo ? (
                           <>
-                            <s>${p.price}</s>{" "}
+                            <s>{fmtMoney(p.price)}</s>{" "}
                             <span className="prod-promo-price">
-                              ${parsePromoOff(promo.off)
+                              {fmtMoney(parsePromoOff(promo.off)
                                 ? parsePromoOff(promo.off).kind === "amount"
                                   ? +(p.price - parsePromoOff(promo.off).value).toFixed(2)
                                   : +(p.price * (1 - parsePromoOff(promo.off).value / 100)).toFixed(2)
-                                : p.price}
+                                : p.price)}
                             </span>
                           </>
                         ) : (
-                          <>${p.price}</>
+                          <>{fmtMoney(p.price)}</>
                         )}
                       </div>
                       {inCart ? (
@@ -288,7 +289,7 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
             <div className="cart-count">
               {itemCount} {itemCount === 1 ? "ítem" : "ítems"}
               {cart.length > 0 && (
-                <span className="cart-count-total"> · ${total.toFixed(2)}</span>
+                <span className="cart-count-total"> · {fmtMoney(total)}</span>
               )}
             </div>
           </div>
@@ -315,7 +316,7 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
                         <Icons.Tag size={11} />
                         {l.discount.promoOff ?? (
                           l.discount.kind === "amount"
-                            ? `-$${l.discount.value}`
+                            ? `-${fmtMoney(l.discount.value)}`
                             : `-${l.discount.value}%`
                         )}
                       </span>
@@ -327,12 +328,12 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
                     </span>
                     {l.discount ? (
                       <span className="line-price">
-                        <s>${l.basePrice}</s>{" "}
-                        <b style={{ color: "var(--magenta)" }}>${l.price}</b>
+                        <s>{fmtMoney(l.basePrice)}</s>{" "}
+                        <b style={{ color: "var(--magenta)" }}>{fmtMoney(l.price)}</b>
                         {" c/u"}
                       </span>
                     ) : (
-                      <span className="line-price">${l.basePrice} c/u</span>
+                      <span className="line-price">{fmtMoney(l.basePrice)} c/u</span>
                     )}
                   </div>
                 </div>
@@ -348,7 +349,7 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
                     </button>
                   </div>
                   <div className="line-total">
-                    ${(l.price * l.qty).toFixed(2)}
+                    {fmtMoney(l.price * l.qty)}
                   </div>
 
                   <div className="line-acts">
@@ -378,17 +379,17 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
           <div className="cart-totals">
             <div className="trow">
               <span>Subtotal</span>
-              <span>${subtotal.toFixed(2)}</span>
+              <span>{fmtMoney(subtotal)}</span>
             </div>
             {savings > 0 && (
               <div className="trow t-save">
                 <span>Descuentos aplicados</span>
-                <span>−${savings.toFixed(2)}</span>
+                <span>−{fmtMoney(savings)}</span>
               </div>
             )}
             <div className="trow t-grand">
               <span>Total</span>
-              <span>${total.toFixed(2)}</span>
+              <span>{fmtMoney(total)}</span>
             </div>
           </div>
 
@@ -397,7 +398,7 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
             disabled={cart.length === 0}
             onClick={() => setPayOpen(true)}
           >
-            Cobrar ${total.toFixed(2)}
+            Cobrar {fmtMoney(total)}
             <Icons.ArrowRight size={16} />
           </button>
           {!canDiscount && (
@@ -494,15 +495,15 @@ function DiscountModal({ line, onClose, onApply, onClear }) {
         <div className="disc-preview">
           <div>
             <div className="dp-label">Precio final</div>
-            <div className="dp-old">${line.basePrice}</div>
+            <div className="dp-old">{fmtMoney(line.basePrice)}</div>
           </div>
           <Icons.ArrowRight size={18} />
           <div>
             <div className="dp-label">Cliente paga</div>
-            <div className="dp-new">${preview.toFixed(2)}</div>
+            <div className="dp-new">{fmtMoney(preview)}</div>
           </div>
           <div className="dp-saved">
-            Ahorra <b>${(line.basePrice - preview).toFixed(2)}</b>
+            Ahorra <b>{fmtMoney(line.basePrice - preview)}</b>
           </div>
         </div>
 
@@ -544,7 +545,7 @@ function PaymentModal({ total, loading, onClose, onFinish, lockAfterSale = true 
         <div className="modal-head">
           <div>
             <div className="modal-eyebrow">Cobrar</div>
-            <div className="modal-title">Total ${total.toFixed(2)}</div>
+            <div className="modal-title">Total {fmtMoney(total)}</div>
             <div className="modal-sub">Acepta pago mixto: efectivo + tarjeta</div>
           </div>
           <button className="iconbtn" onClick={onClose}>
@@ -598,16 +599,16 @@ function PaymentModal({ total, loading, onClose, onFinish, lockAfterSale = true 
         <div className="pay-summary">
           <div className="trow">
             <span>Suma capturada</span>
-            <span>${sum.toFixed(2)}</span>
+            <span>{fmtMoney(sum)}</span>
           </div>
           <div className="trow">
             <span>Total a cobrar</span>
-            <span>${total.toFixed(2)}</span>
+            <span>{fmtMoney(total)}</span>
           </div>
           <div className={`trow t-diff ${ok ? "ok" : "bad"}`}>
             <span>{ok ? "Cuadra" : "Diferencia"}</span>
             <span>
-              {ok ? <Icons.Check size={14} /> : `$${(sum - total).toFixed(2)}`}
+              {ok ? <Icons.Check size={14} /> : fmtMoney(sum - total)}
             </span>
           </div>
         </div>

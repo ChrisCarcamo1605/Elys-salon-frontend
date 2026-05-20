@@ -8,6 +8,7 @@ import {
 import { Icons } from './icons.jsx';
 import { TopBar } from './menu.jsx';
 import { analytics as analyticsApi, apiError } from './api.js';
+import { fmtMoney } from './utils.js';
 
 const RANGES = [
   { key: 'today', label: 'Hoy' },
@@ -106,7 +107,7 @@ function Analytics({ user, onLock, onBack }) {
     boxShadow: '0 8px 24px rgba(0,0,0,.08)',
   };
 
-  const TT = ({ active, payload, label, prefix = '$' }) => {
+  const TT = ({ active, payload, label, money = true }) => {
     if (!active || !payload?.length) return null;
     return (
       <div style={tooltipStyle}>
@@ -115,7 +116,9 @@ function Analytics({ user, onLock, onBack }) {
           <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <span style={{ width: 8, height: 8, background: p.color, borderRadius: 8, flexShrink: 0 }}/>
             <span style={{ color: 'var(--ink-dim)' }}>{p.name}</span>
-            <b style={{ color: 'var(--ink)', marginLeft: 'auto' }}>{prefix}{Number(p.value).toLocaleString()}</b>
+            <b style={{ color: 'var(--ink)', marginLeft: 'auto' }}>
+              {money ? fmtMoney(p.value) : Number(p.value).toLocaleString()}
+            </b>
           </div>
         ))}
       </div>
@@ -172,10 +175,10 @@ function Analytics({ user, onLock, onBack }) {
         </div>
 
         <div className={`kpis${loading ? ' kpis-loading' : ''}`}>
-          <Kpi label="Ventas totales"   value={`$${totalVentas.toLocaleString()}`}    delta={`${+ventasDeltaPct >= 0 ? '+' : ''}${ventasDeltaPct}%`} tone={+ventasDeltaPct >= 0 ? 'up' : 'down'}/>
-          <Kpi label="Utilidad neta"    value={`$${totalUtilidad.toLocaleString()}`}  delta="" tone="up"/>
-          <Kpi label="Margen"           value={`${margen}%`}                           delta="" tone="up"/>
-          <Kpi label="Ticket promedio"  value={`$${ticketPromedio}`}                  delta="" tone="up"/>
+          <Kpi label="Ventas totales"   value={fmtMoney(totalVentas)}    delta={`${+ventasDeltaPct >= 0 ? '+' : ''}${ventasDeltaPct}%`} tone={+ventasDeltaPct >= 0 ? 'up' : 'down'}/>
+          <Kpi label="Utilidad neta"    value={fmtMoney(totalUtilidad)}  delta="" tone="up"/>
+          <Kpi label="Margen"           value={`${margen}%`}             delta="" tone="up"/>
+          <Kpi label="Ticket promedio"  value={fmtMoney(ticketPromedio)} delta="" tone="up"/>
         </div>
 
         <div className="ana-grid">
@@ -249,7 +252,7 @@ function Analytics({ user, onLock, onBack }) {
                 <div key={c.name} className="pl-row">
                   <i style={{ background: c.color }}/>
                   <span className="pl-name">{c.name}</span>
-                  <span className="pl-val">${Number(c.value).toLocaleString()}</span>
+                  <span className="pl-val">{fmtMoney(c.value)}</span>
                 </div>
               ))}
             </div>
@@ -301,7 +304,7 @@ function Analytics({ user, onLock, onBack }) {
                   <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false}/>
                   <XAxis dataKey="hour" stroke="var(--ink-dim)" tick={{ fontSize: 11 }} tickLine={false} axisLine={false}/>
                   <YAxis stroke="var(--ink-dim)" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={28}/>
-                  <Tooltip content={<TT prefix=""/>}/>
+                  <Tooltip content={<TT money={false}/>}/>
                   <Area type="monotone" dataKey="clientes" name="Clientas" stroke="#de0fab" strokeWidth={2.2} fill="url(#trafficFill)"/>
                 </AreaChart>
               </ResponsiveContainer>
@@ -352,7 +355,7 @@ function Analytics({ user, onLock, onBack }) {
                       <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false}/>
                       <XAxis dataKey="label" stroke="var(--ink-dim)" tick={{ fontSize: 11 }} tickLine={false} axisLine={false}/>
                       <YAxis stroke="var(--ink-dim)" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={28}/>
-                      <Tooltip content={<TT prefix=""/>}/>
+                      <Tooltip content={<TT money={false}/>}/>
                       <Bar dataKey="tickets" name="Tickets" fill="#7b2cbf" radius={[6, 6, 0, 0]} maxBarSize={28}/>
                     </BarChart>
                   </ResponsiveContainer>
