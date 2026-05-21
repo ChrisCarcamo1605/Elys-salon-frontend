@@ -42,7 +42,7 @@ function TopBar({ user, title, onLock, onLogout, onBack, right }) {
           <div className="user-meta">
             <div className="user-name">{user.name}</div>
             <div className="user-role">
-              {user.role === "admin" ? "Administradora" : "Empleada"}
+              {user.role === "admin" ? "Administrador" : "Empleado"}
             </div>
           </div>
         </div>
@@ -75,7 +75,7 @@ function MainMenu({ user, onNav, onLock, onLogout, lockTimeoutSec = 120 }) {
       title: "Registrar venta",
       desc: "Cobrar productos y servicios",
       icon: <Icons.Cart size={28} />,
-      roles: ["admin", "empleada"],
+      roles: ["admin", "empleado"],
       featured: true,
     },
     {
@@ -83,21 +83,21 @@ function MainMenu({ user, onNav, onLock, onLogout, lockTimeoutSec = 120 }) {
       title: "Marcar entrada/salida",
       desc: "Checa tu jornada laboral",
       icon: <Icons.Clock size={28} />,
-      roles: ["admin", "empleada"],
+      roles: ["admin", "empleado"],
     },
     {
       id: "inventory",
       title: "Inventario",
       desc: "Stock de productos retail",
       icon: <Icons.Box size={28} />,
-      roles: ["admin", "empleada"],
+      roles: ["admin", "empleado"],
     },
     {
       id: "progress",
       title: "Mi progreso",
       desc: "Avance hacia tu bono",
       icon: <Icons.Trophy size={28} />,
-      roles: ["empleada"],
+      roles: ["empleado"],
     },
     {
       id: "analytics",

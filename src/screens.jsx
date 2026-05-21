@@ -78,14 +78,18 @@ function Inventory({ user, onLock, onBack }) {
             <h2 className="ana-title">Inventario de productos</h2>
           </div>
           <div className="inv-stats">
-            <div className="inv-stat">
-              <div className="inv-stat-label">Valor en venta</div>
-              <div className="inv-stat-val">${totalValue.toLocaleString()}</div>
-            </div>
-            <div className="inv-stat">
-              <div className="inv-stat-label">Costo del inventario</div>
-              <div className="inv-stat-val">${totalCost.toLocaleString()}</div>
-            </div>
+            {user.role === "admin" && (
+              <>
+                <div className="inv-stat">
+                  <div className="inv-stat-label">Valor en venta</div>
+                  <div className="inv-stat-val">${totalValue.toLocaleString()}</div>
+                </div>
+                <div className="inv-stat">
+                  <div className="inv-stat-label">Costo del inventario</div>
+                  <div className="inv-stat-val">${totalCost.toLocaleString()}</div>
+                </div>
+              </>
+            )}
             <div className="inv-stat">
               <div className="inv-stat-label">Stock bajo</div>
               <div className="inv-stat-val" style={{ color: lowStock ? "var(--magenta)" : undefined }}>
@@ -1941,7 +1945,7 @@ function SettingUsers({ onSave }) {
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 600 }}>{u.name}</div>
                 <div style={{ fontSize: 12, color: "var(--ink-dim)" }}>
-                  {u.role === "admin" ? "Administradora" : "Empleada"} · PIN ●●●●
+                  {u.role === "admin" ? "Administrador" : "Empleado"} · PIN ●●●●
                 </div>
               </div>
               <button className="btn-ghost btn-sm" onClick={() => setChangePinFor(u.id)}>Cambiar PIN</button>
@@ -1951,7 +1955,7 @@ function SettingUsers({ onSave }) {
         </div>
         <div style={{ marginTop: 14 }}>
           <button className="btn-primary" onClick={() => setEditEmp({
-            id: `u_new_${Date.now()}`, name: "", position: "", role: "empleada",
+            id: `u_new_${Date.now()}`, name: "", position: "", role: "empleado",
             status: "activa", hireDate: new Date().toISOString().slice(0, 10),
             phone: "", email: "", birthday: "", schedule: "",
             payType: "salario", salary: 0, commissionRate: 0, pin: "",
@@ -2004,7 +2008,7 @@ function SettingRoles({ section, onSave }) {
   }, []);
 
   const selectedUser = users.find((u) => u.id === selectedUserId);
-  const userState = userOverrides[selectedUserId] || { role: "empleada", perms: {} };
+  const userState = userOverrides[selectedUserId] || { role: "empleado", perms: {} };
 
   // Effective permission = override if set, else role default from matrix
   const effective = (permName) => {
@@ -2083,7 +2087,7 @@ function SettingRoles({ section, onSave }) {
                 <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>{u.name}</div>
                   <div style={{ fontSize: 11, color: "var(--ink-dim)" }}>
-                    {userOverrides[u.id]?.role === "admin" ? "Administradora" : "Empleada"}
+                    {userOverrides[u.id]?.role === "admin" ? "Administrador" : "Empleado"}
                   </div>
                 </div>
                 {selectedUserId === u.id && <Icons.Check size={14}/>}
@@ -2100,16 +2104,16 @@ function SettingRoles({ section, onSave }) {
                   </div>
                   <div className="role-toggle">
                     <button
-                      className={`role-tog ${userState.role === "empleada" ? "active" : ""}`}
-                      onClick={() => setUserRole("empleada")}
+                      className={`role-tog ${userState.role === "empleado" ? "active" : ""}`}
+                      onClick={() => setUserRole("empleado")}
                     >
-                      <Icons.Users size={12}/> Empleada
+                      <Icons.Users size={12}/> Empleado
                     </button>
                     <button
                       className={`role-tog ${userState.role === "admin" ? "active" : ""}`}
                       onClick={() => setUserRole("admin")}
                     >
-                      <Icons.Sparkle size={12}/> Administradora
+                      <Icons.Sparkle size={12}/> Administrador
                     </button>
                   </div>
                 </div>
@@ -2174,8 +2178,8 @@ function SettingRoles({ section, onSave }) {
           <div className="perms-table">
             <div className="perms-head">
               <div>Permiso</div>
-              <div>Administradora</div>
-              <div>Empleada</div>
+              <div>Administrador</div>
+              <div>Empleado</div>
             </div>
             {perms.map((p, i) => (
               <div className="perms-row" key={p.perm}>
@@ -2187,10 +2191,10 @@ function SettingRoles({ section, onSave }) {
                   {p.admin ? <Icons.Check size={14}/> : <Icons.X size={12}/>}
                 </button>
                 <button
-                  className={`perm-cell ${p.empleada ? "on" : ""}`}
-                  onClick={() => toggleMatrix(i, "empleada")}
+                  className={`perm-cell ${p.empleado ? "on" : ""}`}
+                  onClick={() => toggleMatrix(i, "empleado")}
                 >
-                  {p.empleada ? <Icons.Check size={14}/> : <Icons.X size={12}/>}
+                  {p.empleado ? <Icons.Check size={14}/> : <Icons.X size={12}/>}
                 </button>
               </div>
             ))}
@@ -2324,7 +2328,7 @@ function SettingGoals({ onSave }) {
       {confirm && (
         <ConfirmModal
           title="¿Eliminar meta?"
-          message={`"${confirm.label}" se quitará del programa de bonos. Las empleadas dejarán de verla.`}
+          message={`"${confirm.label}" se quitará del programa de bonos. Los empleados dejarán de verlo.`}
           confirmLabel="Eliminar"
           danger
           onClose={() => setConfirm(null)}
@@ -2409,7 +2413,7 @@ function GoalModal({ goal, onClose, onSave }) {
             />
           </label>
           <label className="form-row form-row-full">
-            <span className="form-label">Descripción para la empleada</span>
+            <span className="form-label">Descripción para el empleado</span>
             <textarea
               className="form-input"
               rows="2"
@@ -2471,7 +2475,7 @@ function GoalModal({ goal, onClose, onSave }) {
           </label>
 
           <label className="form-row form-row-full">
-            <span className="form-label">Etiqueta de recompensa (lo que ve la empleada)</span>
+            <span className="form-label">Etiqueta de recompensa (lo que ve el empleado)</span>
             <input
               className="form-input"
               value={g.reward}
@@ -2611,7 +2615,7 @@ function SettingLockTime({ onSave }) {
           <button className={`hours-toggle ${lockAfterSale ? "on" : ""}`} onClick={() => setLockAfterSale((v) => !v)}><span/></button>
         </label>
         <label>
-          <span>Pedir PIN al cambiar de empleada</span>
+          <span>Pedir PIN al cambiar de empleado</span>
           <button className={`hours-toggle ${lockOnSwitch ? "on" : ""}`} onClick={() => setLockOnSwitch((v) => !v)}><span/></button>
         </label>
       </div>

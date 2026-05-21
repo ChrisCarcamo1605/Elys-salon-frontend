@@ -211,7 +211,7 @@ export const staff = {
       return arr.map((u) => ({
         id: u.id,
         name: u.name,
-        role: u.role ?? 'empleada',
+        role: u.role ?? 'empleado',
         initials: u.initials || initialsFor(u.name),
         color: u.color || '#999',
         avatarHue: u.avatarHue ?? 0,
@@ -470,7 +470,7 @@ export const timeclock = {
       return arr.map(fromTimeEntry);
     }),
 
-  /** Resumen de horas por empleada. range: 'week'|'biweek'|'month' */
+  /** Resumen de horas por empleado. range: 'week'|'biweek'|'month' */
   summary: (params) =>
     http.get('/timeclock/summary', { params }).then((r) => {
       const arr = Array.isArray(r.data) ? r.data : (r.data?.items ?? []);
@@ -717,7 +717,7 @@ export const analytics = {
       items: fromCategoryRevenue(Array.isArray(r.data) ? r.data : r.data?.items),
     })),
 
-  /** Top empleadas por ventas */
+  /** Top empleados por ventas */
   topEmployees: (params = '30d') =>
     http.get('/analytics/top-employees', { params: toAnalyticsParams(params) }).then((r) => ({
       items: fromTopEmployees(Array.isArray(r.data) ? r.data : r.data?.items),

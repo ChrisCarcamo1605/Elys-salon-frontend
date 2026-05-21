@@ -258,12 +258,12 @@ function Analytics({ user, onLock, onBack }) {
             </div>
           </div>
 
-          {/* BAR: top empleadas */}
+          {/* BAR: top empleados */}
           <div className="card">
             <div className="card-head">
               <div>
                 <div className="card-eyebrow">Equipo</div>
-                <div className="card-title">Top empleadas · {rangeLabel}</div>
+                <div className="card-title">Top empleados · {rangeLabel}</div>
               </div>
             </div>
             <div style={{ height: 260 }}>

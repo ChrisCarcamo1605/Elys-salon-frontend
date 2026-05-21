@@ -7,7 +7,7 @@ import { exportUtils } from './reports.jsx';
 import { staff as staffApi, timeclock as timeclockApi, payroll as payrollApi, apiError } from './api.js';
 import { fmtMoney } from './utils.js';
 
-// Permisos otorgables individualmente a empleadas
+// Permisos otorgables individualmente a empleados
 const GRANTABLE_PERMS = [
   { key: 'tickets.discount',    label: 'Aplicar descuentos',       desc: 'Puede modificar precios y descuentos al cobrar' },
   { key: 'tickets.void',        label: 'Anular ventas',            desc: 'Puede cancelar tickets ya cobrados' },
@@ -18,7 +18,7 @@ const GRANTABLE_PERMS = [
   { key: 'inventory.adjust',    label: 'Ajustar inventario',       desc: 'Puede editar cantidades de stock' },
   { key: 'users.read',          label: 'Ver plantilla y nómina',   desc: 'Puede ver el equipo y horas trabajadas' },
   { key: 'payroll.read',        label: 'Ver nómina',               desc: 'Puede consultar la nómina del equipo' },
-  { key: 'attendance.read_all', label: 'Ver asistencia completa',  desc: 'Ve el historial de todas las empleadas' },
+  { key: 'attendance.read_all', label: 'Ver asistencia completa',  desc: 'Ve el historial de todos los empleados' },
   { key: 'bonuses.manage',      label: 'Gestionar metas y bonos',  desc: 'Puede crear y editar metas' },
   { key: 'offers.write',        label: 'Gestionar promociones',    desc: 'Puede crear y editar promociones' },
 ];
@@ -97,7 +97,7 @@ function Staff({ user, onLock, onBack }) {
       .then(() => {
         setEmployees((es) => es.filter((e) => e.id !== id));
         setConfirmDelete(null);
-        showToast("Empleada eliminada", emp?.name);
+        showToast("Empleado eliminada", emp?.name);
       })
       .catch((err) => {
         setConfirmDelete(null);
@@ -122,7 +122,7 @@ function Staff({ user, onLock, onBack }) {
                   id: `u_new_${Date.now()}`,
                   name: "",
                   position: "",
-                  role: "empleada",
+                  role: "empleado",
                   status: "activa",
                   hireDate: new Date().toISOString().slice(0, 10),
                   phone: "",
@@ -137,7 +137,7 @@ function Staff({ user, onLock, onBack }) {
                 })
               }
             >
-              <Icons.Plus size={14}/> Nueva empleada
+              <Icons.Plus size={14}/> Nueva empleado
             </button>
           )}
         </div>
@@ -184,7 +184,7 @@ function Staff({ user, onLock, onBack }) {
 
       {confirmDelete && (
         <ConfirmModal
-          title="¿Eliminar empleada?"
+          title="¿Eliminar empleado?"
           message={`Vas a eliminar a ${confirmDelete.name} de la plantilla. Esta acción no se puede deshacer.`}
           confirmLabel="Eliminar"
           danger
@@ -342,7 +342,7 @@ function StaffSchedule({ employees }) {
 
       <div className="set-card" style={{ marginTop: 12, padding: 0, overflow: "hidden" }}>
         <div className="sched-row sched-head">
-          <div>Empleada</div>
+          <div>Empleado</div>
           <div>Estado</div>
           <div>Entrada</div>
           <div>Salida</div>
@@ -420,7 +420,7 @@ function StaffHours({ employees }) {
 
   React.useEffect(() => {
     timeclockApi.history({ range }).then((data) => {
-      if (Array.isArray(data?.entries)) setHistoric(data.entries);
+      if (Array.isArray(data)) setHistoric(data);
     }).catch(() => {});
   }, [range]);
 
@@ -444,7 +444,7 @@ function StaffHours({ employees }) {
 
   // Compute per-employee
   const summary = employees.map((e) => {
-    const entries = inRange.filter((t) => t.userId === e.id);
+    const entries = inRange.filter((t) => t.userId === e.id && t.in && t.out);
     const totalMins = entries.reduce((s, t) => {
       const [ih, im] = t.in.split(":").map(Number);
       const [oh, om] = t.out.split(":").map(Number);
@@ -482,7 +482,7 @@ function StaffHours({ employees }) {
   totals.avg = totals.employees ? totals.hours / totals.employees : 0;
 
   const exportToCSV = () => {
-    const cols = ["Empleada", "Puesto", "Días trabajados", "Horas totales", "Promedio diario (h)", "Costo estimado"];
+    const cols = ["Empleado", "Puesto", "Días trabajados", "Horas totales", "Promedio diario (h)", "Costo estimado"];
     const rows = summary.map((s) => [
       s.name, s.position, s.daysWorked,
       s.totalHours.toFixed(2),
@@ -499,7 +499,7 @@ function StaffHours({ employees }) {
       title: `Horas trabajadas · ${ranges[range].label}`,
       subtitle: `Desde ${cutoffStr} hasta ${today.toISOString().slice(0,10)}`,
       columns: [
-        { label: "Empleada" },
+        { label: "Empleado" },
         { label: "Puesto" },
         { label: "Días",            align: "right" },
         { label: "Horas totales",   align: "right" },
@@ -515,7 +515,7 @@ function StaffHours({ employees }) {
       totals: [
         { label: "Horas totales", value: `${totals.hours.toFixed(1)}h` },
         { label: "Costo total",   value: fmtMoney(totals.cost) },
-        { label: "Empleadas",     value: totals.employees },
+        { label: "Empleados",     value: totals.employees },
         { label: "Promedio",      value: `${totals.avg.toFixed(1)}h` },
       ],
     });
@@ -556,7 +556,7 @@ function StaffHours({ employees }) {
           <div className="kpi-value">{fmtMoney(totals.cost)}</div>
         </div>
         <div className="kpi">
-          <div className="kpi-label">Empleadas activas</div>
+          <div className="kpi-label">Empleados activos</div>
           <div className="kpi-value">{totals.employees}</div>
         </div>
         <div className="kpi">
@@ -710,7 +710,7 @@ function StaffPayroll({ employees }) {
 
       <div className="set-card" style={{ marginTop: 12, padding: 0, overflow: "hidden" }}>
         <div className="payroll-row payroll-head">
-          <div>Empleada</div>
+          <div>Empleado</div>
           <div>Ventas {period === "biweek" ? "quincena" : "mes"}</div>
           <div>Sueldo</div>
           <div>Comisión</div>
@@ -763,7 +763,7 @@ function EmployeeModal({ employee, onClose, onSave, onChangePin, onSavePermissio
       <div className="modal entry-modal" onClick={(ev) => ev.stopPropagation()} style={{ width: "min(720px, 92vw)" }}>
         <div className="modal-head">
           <div>
-            <div className="modal-eyebrow">{isNew ? "Nueva empleada" : "Editar empleada"}</div>
+            <div className="modal-eyebrow">{isNew ? "Nueva empleado" : "Editar empleado"}</div>
             <div className="modal-title">{e.name || "Sin nombre"}</div>
             <div className="modal-sub">{e.position || "Define un puesto"}</div>
           </div>
@@ -805,8 +805,8 @@ function EmployeeModal({ employee, onClose, onSave, onChangePin, onSavePermissio
               <label className="form-row">
                 <span className="form-label">Rol del sistema</span>
                 <select className="form-input" value={e.role} onChange={(ev) => upd("role", ev.target.value)}>
-                  <option value="empleada">Empleada</option>
-                  <option value="admin">Administradora</option>
+                  <option value="empleado">Empleado</option>
+                  <option value="admin">Administrador</option>
                 </select>
               </label>
               <label className="form-row">
@@ -903,7 +903,7 @@ function EmployeeModal({ employee, onClose, onSave, onChangePin, onSavePermissio
               </div>
             </div>
 
-            {!isNew && e.role === "empleada" && (
+            {!isNew && e.role === "empleado" && (
               <div className="emp-pay-section">
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                   <div>
@@ -957,7 +957,7 @@ function EmployeeModal({ employee, onClose, onSave, onChangePin, onSavePermissio
         <div className="modal-foot">
           <button className="btn-ghost" onClick={onClose}>Cancelar</button>
           <button className="btn-primary" disabled={!valid} onClick={() => onSave(e)}>
-            <Icons.Check size={14}/> {isNew ? "Crear empleada" : "Guardar cambios"}
+            <Icons.Check size={14}/> {isNew ? "Crear empleado" : "Guardar cambios"}
           </button>
         </div>
       </div>
@@ -1290,7 +1290,7 @@ function TimeClock({ user, onLock, onBack }) {
               </div>
             </div>
             <ul className="tips-list">
-              <li>Si olvidaste marcar entrada, avisa a la administradora para corregirlo.</li>
+              <li>Si olvidaste marcar entrada, avisa a la administrador para corregirlo.</li>
               <li>El sistema se bloquea solo tras 2 min de inactividad.</li>
               <li>Las horas trabajadas se usan para la nómina del mes.</li>
             </ul>

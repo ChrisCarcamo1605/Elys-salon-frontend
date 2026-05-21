@@ -1521,7 +1521,7 @@ function ReportsPanel({ onAction }) {
           downloadBlob(blob, `nomina-quincenal-${fmtToday}.xlsx`);
           onAction({ title: "Reporte Excel generado", sub: "Nómina quincenal" });
         }).catch(() => {
-          const cols = ["Empleada", "Puesto", "Sueldo mensual", "Sueldo quincenal", "Comisión quincenal", "Total quincena"];
+          const cols = ["Empleado", "Puesto", "Sueldo mensual", "Sueldo quincenal", "Comisión quincenal", "Total quincena"];
           const rows = data.employees.map((e) => {
             const top = data.topEmployees.find((t) => t.name.toLowerCase().startsWith(e.name.split(" ")[0].toLowerCase().slice(0, 4)));
             const sales = (top?.ventas || 0) / 2;
@@ -1563,7 +1563,7 @@ function ReportsPanel({ onAction }) {
           subtitle: `Pago variable y fijo · quincena que termina ${new Date().toLocaleDateString("es-MX", { dateStyle: "long" })}`,
           charts: [payrollBar, breakdownPie],
           columns: [
-            { label: "Empleada" },
+            { label: "Empleado" },
             { label: "Puesto" },
             { label: "Ventas Q.",   align: "right" },
             { label: "Sueldo Q.",   align: "right" },
@@ -1582,7 +1582,7 @@ function ReportsPanel({ onAction }) {
           totals: [
             { label: "Total quincena", value: fmtMoney(grandTotal) },
             { label: "Total mensual",  value: fmtMoney(grandTotal * 2) },
-            { label: "Empleadas",      value: rows.length },
+            { label: "Empleados",      value: rows.length },
           ],
         });
         onAction({ title: "Reporte PDF abierto", sub: "Nómina quincenal" });
@@ -1596,7 +1596,7 @@ function ReportsPanel({ onAction }) {
           downloadBlob(blob, `asistencia-${fmtToday}.xlsx`);
           onAction({ title: "Reporte Excel generado", sub: "Asistencia 60 días" });
         }).catch(() => {
-          const cols = ["Fecha", "Empleada", "Entrada", "Salida", "Horas"];
+          const cols = ["Fecha", "Empleado", "Entrada", "Salida", "Horas"];
           const rows = data.historicTimeEntries.map((t) => {
             const u = data.employees.find((e) => e.id === t.userId);
             const [ih, im] = t.in.split(":").map(Number);
@@ -1651,7 +1651,7 @@ function ReportsPanel({ onAction }) {
           charts: [lineChart, empBar],
           columns: [
             { label: "Fecha" },
-            { label: "Empleada" },
+            { label: "Empleado" },
             { label: "Entrada" },
             { label: "Salida" },
             { label: "Horas",   align: "right" },
@@ -1734,7 +1734,7 @@ function ReportsPanel({ onAction }) {
           rows.push(["Stock bajo", products.filter((p) => (p.stock || 0) < (p.stockMin || 8)).length]);
           rows.push([]);
           rows.push(["EQUIPO"]);
-          rows.push(["Empleadas activas", data.employees.filter((e) => e.status === "activa").length]);
+          rows.push(["Empleados activos", data.employees.filter((e) => e.status === "activa").length]);
           rows.push(["Nómina base", data.employees.reduce((s, e) => s + e.salary, 0)]);
           exportUtils.downloadCSV(`resumen-ejecutivo-${fmtToday}.csv`, ["Concepto", "Valor"], rows);
           onAction({ title: "Resumen Excel generado", sub: "Reporte ejecutivo" });
@@ -1866,10 +1866,10 @@ function ReportsPanel({ onAction }) {
             },
             {
               title: "4. Nómina del mes",
-              subtitle: `${payroll.length} empleadas · pago total ${fmtMoney(payrollTotal)}`,
+              subtitle: `${payroll.length} empleados · pago total ${fmtMoney(payrollTotal)}`,
               chart: payrollBar,
               columns: [
-                { label: "Empleada" },
+                { label: "Empleado" },
                 { label: "Puesto" },
                 { label: "Ventas",   align: "right" },
                 { label: "Sueldo",   align: "right" },
@@ -1892,7 +1892,7 @@ function ReportsPanel({ onAction }) {
               subtitle: "Horas trabajadas por el equipo · últimos 14 días",
               chart: attLine,
               columns: [
-                { label: "Empleada" },
+                { label: "Empleado" },
                 { label: "Estado" },
                 { label: "Horario" },
               ],
@@ -1909,7 +1909,7 @@ function ReportsPanel({ onAction }) {
     { id: "executive",   title: "Reporte ejecutivo", desc: "Resumen completo: ventas, inventario, equipo y asistencia", icon: "Sparkle", tone: "magenta", featured: true },
     { id: "sales",       title: "Ventas del periodo", desc: "Detalle diario con gráficas de tendencia", icon: "TrendUp", tone: "magenta" },
     { id: "inventory",   title: "Inventario", desc: "Stock, valor y estado · gráfica de distribución", icon: "Box", tone: "purple" },
-    { id: "payroll",     title: "Nómina del mes", desc: "Sueldo base, comisiones y bonos por empleada", icon: "Cash", tone: "green" },
+    { id: "payroll",     title: "Nómina del mes", desc: "Sueldo base, comisiones y bonos por empleado", icon: "Cash", tone: "green" },
     { id: "attendance",  title: "Asistencia", desc: "Marcas e historial de horas trabajadas", icon: "Clock", tone: "teal" },
     { id: "topProducts", title: "Top categorías", desc: "Ingresos por categoría · pie + bar chart", icon: "Chart", tone: "orange" },
   ];
