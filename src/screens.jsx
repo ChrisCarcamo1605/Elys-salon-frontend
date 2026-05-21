@@ -314,7 +314,7 @@ function EntryModal({ product, products, onClose, onSave }) {
             <span className="form-label">Proveedor</span>
             <input
               className="form-input"
-              placeholder="Ej. Distribuidora Beauty MX"
+              placeholder="Ej. Distribuidora Beauty SV"
               value={supplier}
               onChange={(e) => setSupplier(e.target.value)}
             />
@@ -1364,12 +1364,6 @@ function SettingCatalog({ filter, onSave }) {
     }).catch(() => {});
   }, [filter]);
 
-  useEffect(() => {
-    catalogApi.get().then((result) => {
-      setItems(result.items.filter((c) => c.type === filter));
-    }).catch(() => {/* keep mock */});
-  }, [filter]);
-
   const filtered = items.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()));
 
   const handleSave = (item) => {
@@ -1491,6 +1485,11 @@ function SettingCatalog({ filter, onSave }) {
 
 function CatalogItemModal({ item, categories, onClose, onSave }) {
   const [it, setIt] = useState(item);
+
+  useEffect(() => {
+    setIt(item);
+  }, [item?.id]);
+
   const upd = (k, v) => setIt((p) => ({ ...p, [k]: v }));
   const isNew = !item.name;
   const isProduct = it.type === "P";
@@ -1648,12 +1647,6 @@ function SettingCategories({ onSave }) {
 
   useEffect(() => {
     categoriesApi.list().then((items) => setCats(items)).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    categoriesApi.list().then((items) => {
-      setCats(items);
-    }).catch(() => {/* keep mock */});
   }, []);
 
   const handleAdd = () => {

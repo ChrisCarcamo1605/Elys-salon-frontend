@@ -2,7 +2,7 @@
 import React from 'react';
 import { Icons } from './icons.jsx';
 import { TopBar } from './menu.jsx';
-import { alerts as alertsApi, promotions as promotionsApi, reports as reportsApi, downloadBlob, apiError, analytics as analyticsApi, catalog as catalogApi, staff as staffApi, timeclock as timeclockApi, settings as settingsApi } from './api.js';
+import { alerts as alertsApi, promotions as promotionsApi, reports as reportsApi, downloadBlob, apiError, analytics as analyticsApi, catalog as catalogApi, staff as staffApi, timeclock as timeclockApi, settings as settingsApi, sales as salesApi } from './api.js';
 import { fmtMoney } from './utils.js';
 
 // ============================================================
@@ -366,7 +366,8 @@ function Reports({ user, onLock, onBack, onNav }) {
 
         <div className="tabs" style={{ marginBottom: 20, padding: 0 }}>
           {[
-            { id: "alerts",   label: "Alertas",  icon: "TrendUp" },
+            { id: "alerts",   label: "Alertas",          icon: "TrendUp" },
+            { id: "history",  label: "Historial de ventas", icon: "Cash" },
             { id: "reports",  label: "Generar reportes", icon: "Receipt" },
           ].map((t) => {
             const IconComp = Icons[t.icon];
@@ -384,6 +385,7 @@ function Reports({ user, onLock, onBack, onNav }) {
         </div>
 
         {tab === "alerts"  && <AlertsPanel onNav={onNav} onAction={showToast}/>}
+        {tab === "history" && <SalesHistory onAction={showToast}/>}
         {tab === "reports" && <ReportsPanel onAction={showToast}/>}
       </div>
 
@@ -941,6 +943,416 @@ function OfferEditModal({ slow, onClose, onSave }) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+//   SALES HISTORY
+// ============================================================
+
+const SALE_RANGES = [
+  { key: 'today', label: 'Hoy' },
+  { key: '7d',    label: '7 días' },
+  { key: '30d',   label: '30 días' },
+  { key: '90d',   label: '90 días' },
+  { key: '365d',  label: 'Año' },
+  { key: 'custom', label: 'Personalizado' },
+];
+
+function fmtDateTime(dateStr, timeStr) {
+  if (!dateStr) return '—';
+  const [, m, d] = dateStr.split('-');
+  const time = timeStr ? timeStr.slice(0, 5) : '';
+  return `${+d}/${+m}${time ? ' ' + time : ''}`;
+}
+
+function paymentLabel(payments) {
+  if (!payments?.length) return '—';
+  const methods = [...new Set(payments.map((p) => p.method))];
+  if (methods.length === 1) {
+    if (methods[0] === 'cash')   return 'Efectivo';
+    if (methods[0] === 'card')   return 'Tarjeta';
+    return methods[0];
+  }
+  return 'Mixto';
+}
+
+function SalesRangeBar({ range, setRange, customFrom, setCustomFrom, customTo, setCustomTo }) {
+  return (
+    <div className="ana-date-range" style={{ marginBottom: 20 }}>
+      <div className="sh-pills">
+        {SALE_RANGES.map((r) => (
+          <button
+            key={r.key}
+            className={`tab ${range === r.key ? 'active' : ''}`}
+            style={{ padding: '5px 12px', fontSize: 13 }}
+            onClick={() => setRange(r.key)}
+          >
+            {r.label}
+          </button>
+        ))}
+      </div>
+      {range === 'custom' && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
+          <label className="ana-date-label">De</label>
+          <input
+            type="date"
+            className="ana-date-input"
+            value={customFrom}
+            max={customTo}
+            onChange={(e) => setCustomFrom(e.target.value)}
+          />
+          <label className="ana-date-label">hasta</label>
+          <input
+            type="date"
+            className="ana-date-input"
+            value={customTo}
+            min={customFrom}
+            max={new Date().toISOString().split('T')[0]}
+            onChange={(e) => setCustomTo(e.target.value)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SalesSummaryStrip({ sales }) {
+  const active  = sales.filter((s) => !s.voided);
+  const voided  = sales.filter((s) => s.voided);
+  const total   = active.reduce((acc, s) => acc + (s.total ?? 0), 0);
+  const avg     = active.length ? total / active.length : 0;
+
+  return (
+    <div className="sh-strip">
+      <div className="sh-strip-item">
+        <span className="sh-strip-val">{active.length}</span>
+        <span className="sh-strip-lbl">ventas</span>
+      </div>
+      <div className="sh-strip-sep"/>
+      <div className="sh-strip-item">
+        <span className="sh-strip-val">{fmtMoney(total)}</span>
+        <span className="sh-strip-lbl">total</span>
+      </div>
+      <div className="sh-strip-sep"/>
+      <div className="sh-strip-item">
+        <span className="sh-strip-val">{fmtMoney(avg)}</span>
+        <span className="sh-strip-lbl">promedio</span>
+      </div>
+      {voided.length > 0 && (
+        <>
+          <div className="sh-strip-sep"/>
+          <div className="sh-strip-item">
+            <span className="sh-strip-val sh-strip-val--void">{voided.length}</span>
+            <span className="sh-strip-lbl">anuladas</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function SalesTableRow({ sale, onVoidRequest }) {
+  const [expanded, setExpanded] = React.useState(false);
+  const lines = sale.lines ?? [];
+  const pmtLabel = paymentLabel(sale.payments);
+
+  return (
+    <>
+      <tr
+        className={`sh-row ${sale.voided ? 'sh-row--void' : ''}`}
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <td className="sh-cell sh-cell--date">{fmtDateTime(sale.date, sale.time)}</td>
+        <td className="sh-cell">{sale.employeeName ?? '—'}</td>
+        <td className="sh-cell sh-cell--num">{lines.length}</td>
+        <td className="sh-cell sh-cell--num sh-cell--money">{fmtMoney(sale.total ?? 0)}</td>
+        <td className="sh-cell">
+          <span className="sh-badge sh-badge--pay">{pmtLabel}</span>
+        </td>
+        <td className="sh-cell">
+          {sale.voided
+            ? <span className="sh-badge sh-badge--void">Anulada</span>
+            : <span className="sh-badge sh-badge--ok">Activa</span>
+          }
+        </td>
+        <td className="sh-cell sh-cell--actions" onClick={(e) => e.stopPropagation()}>
+          <button
+            className="btn-ghost btn-sm"
+            title="Ver detalle"
+            onClick={() => setExpanded((v) => !v)}
+          >
+            <Icons.TrendUp size={13}/>
+          </button>
+          {!sale.voided && (
+            <button
+              className="btn-ghost btn-sm"
+              title="Anular venta"
+              style={{ color: 'var(--magenta)' }}
+              onClick={() => onVoidRequest(sale)}
+            >
+              <Icons.Trash size={13}/>
+            </button>
+          )}
+        </td>
+      </tr>
+      {expanded && (
+        <tr className="sh-detail-row">
+          <td colSpan={7}>
+            <div className="sh-detail">
+              <div className="sh-detail-header">
+                <span className="sh-detail-label">Artículo</span>
+                <span className="sh-detail-label sh-detail-label--r">Cant.</span>
+                <span className="sh-detail-label sh-detail-label--r">Subtotal</span>
+              </div>
+              {lines.map((l, i) => (
+                <div className="sh-detail-line" key={i}>
+                  <span className="sh-detail-name">{l.itemName ?? l.name}</span>
+                  <span className="sh-detail-qty">× {l.qty ?? 1}</span>
+                  <div className="sh-detail-right">
+                    <span className="sh-detail-price">{fmtMoney((l.price ?? 0) * (l.qty ?? 1))}</span>
+                    {(l.discountValue > 0) && (
+                      <span className="sh-detail-disc">
+                        −{l.discountKind === 'percent' ? `${l.discountValue}%` : fmtMoney(l.discountValue)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {(sale.tip > 0) && (
+                <div className="sh-detail-line sh-detail-line--tip">
+                  <span className="sh-detail-name">Propina</span>
+                  <span/>
+                  <span className="sh-detail-price">{fmtMoney(sale.tip)}</span>
+                </div>
+              )}
+              <div className="sh-detail-total">
+                <div>
+                  <span className="sh-detail-total-label">Total</span>
+                  {sale.customerName && (
+                    <span className="sh-detail-customer"> · {sale.customerName}</span>
+                  )}
+                </div>
+                <span className="sh-detail-total-amt">{fmtMoney(sale.total ?? 0)}</span>
+              </div>
+              {sale.payments?.length > 0 && (
+                <div className="sh-detail-payments">
+                  {sale.payments.map((p, i) => (
+                    <span key={i} className="sh-badge sh-badge--pay">
+                      {p.method === 'cash' ? 'Efectivo' : p.method === 'card' ? 'Tarjeta' : p.method} {fmtMoney(p.amount)}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function SalesVoidModal({ sale, onClose, onConfirm }) {
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal entry-modal" onClick={(e) => e.stopPropagation()} style={{ width: 'min(420px, 92vw)' }}>
+        <div className="modal-head">
+          <div>
+            <div className="modal-eyebrow">Anular venta</div>
+            <div className="modal-title">{fmtMoney(sale.total ?? 0)}</div>
+            <div className="modal-sub">{fmtDateTime(sale.date, sale.time)} · {sale.employeeName ?? ''}</div>
+          </div>
+          <button className="iconbtn" onClick={onClose}><Icons.X size={16}/></button>
+        </div>
+        <div style={{ padding: '0 20px 16px', fontSize: 14, color: 'var(--ink-dim)', lineHeight: 1.5 }}>
+          Esta acción revertirá el stock de los productos incluidos y marcará la venta como anulada. No se puede deshacer.
+        </div>
+        <div className="modal-foot">
+          <button className="btn-ghost" onClick={onClose}>Cancelar</button>
+          <button
+            className="btn-primary"
+            style={{ background: 'var(--magenta)', borderColor: 'var(--magenta)' }}
+            onClick={onConfirm}
+          >
+            <Icons.Trash size={14}/> Confirmar anulación
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SalesHistory({ onAction }) {
+  const today = new Date().toISOString().split('T')[0];
+
+  const [range, setRange]           = React.useState('30d');
+  const [customFrom, setCustomFrom] = React.useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 30);
+    return d.toISOString().split('T')[0];
+  });
+  const [customTo, setCustomTo]     = React.useState(today);
+
+  const [sales, setSales]     = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError]     = React.useState(null);
+  const [page, setPage]       = React.useState(1);
+  const [voidTarget, setVoidTarget] = React.useState(null);
+
+  const PAGE_SIZE = 20;
+
+  const activeParams = React.useMemo(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (range === 'custom') {
+      if (customFrom && customTo && customFrom <= customTo)
+        return { from: customFrom, to: customTo };
+      return null;
+    }
+    const daysBack = { today: 0, '7d': 6, '30d': 29, '90d': 89, '365d': 364 }[range] ?? 29;
+    const from = new Date();
+    from.setDate(from.getDate() - daysBack);
+    return { from: from.toISOString().split('T')[0], to: todayStr };
+  }, [range, customFrom, customTo]);
+
+  const paramsKey = activeParams ? JSON.stringify(activeParams) : null;
+
+  React.useEffect(() => {
+    if (!activeParams) return;
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    salesApi.list(activeParams)
+      .then((resp) => {
+        const items = Array.isArray(resp) ? resp : (resp.items ?? []);
+        setSales(items);
+      })
+      .catch((err) => setError(apiError(err)))
+      .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramsKey]);
+
+  const totalPages = Math.max(1, Math.ceil(sales.length / PAGE_SIZE));
+  const pageSales  = sales.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const handleVoid = () => {
+    if (!voidTarget) return;
+    salesApi.void(voidTarget.id)
+      .then(() => {
+        setSales((prev) =>
+          prev.map((s) => s.id === voidTarget.id ? { ...s, voided: true, voidedAt: new Date().toISOString() } : s)
+        );
+        setVoidTarget(null);
+        onAction({ title: 'Venta anulada', sub: `Ticket ${voidTarget.id}` });
+      })
+      .catch((err) => {
+        setVoidTarget(null);
+        onAction({ title: 'Error al anular', sub: apiError(err) });
+      });
+  };
+
+  return (
+    <div>
+      <SalesRangeBar
+        range={range} setRange={setRange}
+        customFrom={customFrom} setCustomFrom={setCustomFrom}
+        customTo={customTo}    setCustomTo={setCustomTo}
+      />
+
+      {!loading && !error && sales.length > 0 && (
+        <SalesSummaryStrip sales={sales}/>
+      )}
+
+      {loading && (
+        <div className="sh-skeleton">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="sh-skeleton-row"/>
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <div className="sh-error">
+          <span>{error}</span>
+          <button
+            className="btn-ghost btn-sm"
+            onClick={() => {
+              if (!activeParams) return;
+              setLoading(true);
+              setError(null);
+              salesApi.list(activeParams)
+                .then((resp) => setSales(Array.isArray(resp) ? resp : (resp.items ?? [])))
+                .catch((err) => setError(apiError(err)))
+                .finally(() => setLoading(false));
+            }}
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      {!loading && !error && sales.length === 0 && (
+        <div className="sh-empty">
+          <Icons.Receipt size={32}/>
+          <p>Sin ventas en este período</p>
+        </div>
+      )}
+
+      {!loading && !error && sales.length > 0 && (
+        <>
+          <div className="sh-table-wrap">
+            <table className="sh-table">
+              <thead>
+                <tr>
+                  <th className="sh-th">Fecha</th>
+                  <th className="sh-th">Empleado</th>
+                  <th className="sh-th sh-th--num">Art.</th>
+                  <th className="sh-th sh-th--num">Total</th>
+                  <th className="sh-th">Pago</th>
+                  <th className="sh-th">Estado</th>
+                  <th className="sh-th"/>
+                </tr>
+              </thead>
+              <tbody>
+                {pageSales.map((sale) => (
+                  <SalesTableRow
+                    key={sale.id}
+                    sale={sale}
+                    onVoidRequest={setVoidTarget}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {totalPages > 1 && (
+            <div className="sh-pagination">
+              <button
+                className="btn-ghost btn-sm"
+                disabled={page === 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                ← Anterior
+              </button>
+              <span className="sh-page-info">Pág. {page} / {totalPages}</span>
+              <button
+                className="btn-ghost btn-sm"
+                disabled={page === totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Siguiente →
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {voidTarget && (
+        <SalesVoidModal
+          sale={voidTarget}
+          onClose={() => setVoidTarget(null)}
+          onConfirm={handleVoid}
+        />
+      )}
     </div>
   );
 }

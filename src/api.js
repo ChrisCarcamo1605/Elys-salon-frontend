@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Vite lee las variables desde import.meta.env
-const BASE = import.meta.env.VITE_API_BASE_URL || 'elys-salon-backend-dev.up.railway.app/api';
+const BASE = import.meta.env.VITE_API_BASE_URL || 'https://elys-salon-backend-dev.up.railway.app/';
 
 console.log('API base URL:', BASE);
 const http = axios.create({
@@ -350,19 +350,52 @@ function toCreateSaleBody(s) {
   });
 }
 
+// Backend returns employee as nested object, createdAt as ISO timestamp,
+// and numeric columns (total, price, etc.) as strings from PostgreSQL.
+function fromSaleItem(s) {
+  if (!s) return s;
+  const iso = s.createdAt ?? '';
+  const [dateStr, timeRaw] = iso.split('T');
+  return {
+    ...s,
+    employeeName: s.employee?.name ?? s.employeeName ?? null,
+    date: dateStr ?? null,
+    time: timeRaw ? timeRaw.slice(0, 5) : null,
+    voided: s.status === 'voided',
+    total:         s.total         != null ? Number(s.total)         : 0,
+    subtotal:      s.subtotal      != null ? Number(s.subtotal)      : 0,
+    tip:           s.tip           != null ? Number(s.tip)           : 0,
+    discountTotal: s.discountTotal != null ? Number(s.discountTotal) : 0,
+    lines: (s.lines ?? []).map((l) => ({
+      ...l,
+      price:         l.price         != null ? Number(l.price)         : 0,
+      basePrice:     l.basePrice     != null ? Number(l.basePrice)     : 0,
+      discountValue: l.discountValue != null ? Number(l.discountValue) : 0,
+      qty:           l.qty           != null ? Number(l.qty)           : 1,
+    })),
+    payments: (s.payments ?? []).map((p) => ({
+      ...p,
+      amount: p.amount != null ? Number(p.amount) : 0,
+    })),
+  };
+}
+
 export const sales = {
   create: (body) =>
     http.post('/sales', toCreateSaleBody(body)).then((r) => r.data),
 
-  list: (params) =>
-    http.get('/sales', { params }).then((r) => {
+  list: (params) => {
+    // Extend `to` to end-of-day so sales made on the last selected date are included.
+    const p = params?.to ? { ...params, to: params.to + 'T23:59:59' } : params;
+    return http.get('/sales', { params: p }).then((r) => {
       const raw = r.data;
-      if (Array.isArray(raw)) return { items: raw, total: raw.length };
-      return raw;
-    }),
+      if (Array.isArray(raw)) return { items: raw.map(fromSaleItem), total: raw.length };
+      return { ...raw, items: (raw.items ?? []).map(fromSaleItem) };
+    });
+  },
 
   get: (id) =>
-    http.get(`/sales/${id}`).then((r) => r.data),
+    http.get(`/sales/${id}`).then((r) => fromSaleItem(r.data)),
 
   /** Anular venta (admin). Revierte stock. */
   void: (id) =>

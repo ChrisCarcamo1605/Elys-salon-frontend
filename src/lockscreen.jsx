@@ -130,13 +130,13 @@ function LockScreen({ onUnlock, reason }) {
             </button>
           ))}
           <button className="key key-ghost" onClick={() => setPin("")} disabled={loading}>
-            Limpiar
+            <Icons.X size={16}/>
           </button>
           <button className="key" onClick={() => push("0")} disabled={loading}>
             0
           </button>
           <button className="key key-ghost" onClick={back} disabled={loading}>
-            ←
+            <Icons.Backspace size={18}/>
           </button>
         </div>
 

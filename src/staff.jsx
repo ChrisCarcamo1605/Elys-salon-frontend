@@ -1158,7 +1158,7 @@ function TimeClock({ user, onLock, onBack }) {
             <div className="clock-date">{dateStr}</div>
 
             <div className="clock-greeting">
-              {isWorking ? "Estás trabajando 💼" : "Hola, " + user.name.split(" ")[0]}
+              {isWorking ? "Estás trabajando" : "Hola, " + user.name.split(" ")[0]}
             </div>
             <div className="clock-sub">
               {isWorking
