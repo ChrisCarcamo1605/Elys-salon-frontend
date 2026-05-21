@@ -170,6 +170,7 @@ function toGoalBody(g) {
     rewardType: g.rewardType,
     rewardValue: g.rewardValue != null ? Number(g.rewardValue) : undefined,
     tone: g.tone,
+    resetPeriod: g.resetPeriod,
     active: g.active,
   });
 }

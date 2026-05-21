@@ -12,6 +12,27 @@ import { Reports } from './reports.jsx';
 import { Inventory, Progress, Team, Settings } from './screens.jsx';
 
 
+// Hash-based router — keeps browser/mobile back button working within the app.
+function useHashRouter() {
+  const parse = () => window.location.hash.replace(/^#\/?/, '') || 'menu';
+  const [route, setRouteState] = useState(parse);
+
+  useEffect(() => {
+    const onPop = () => setRouteState(parse());
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  const navigate = useCallback((name, { replace = false } = {}) => {
+    const hash = name === 'menu' ? '#/' : `#/${name}`;
+    if (replace) history.replaceState(null, '', hash);
+    else history.pushState(null, '', hash);
+    setRouteState(name);
+  }, []);
+
+  return [route, navigate];
+}
+
 // Cookie helpers — persist appearance settings across sessions.
 const APP_COOKIE = "elys_prefs";
 const readCookie = () => {
@@ -50,7 +71,7 @@ function App() {
   }, [setTweakRaw]);
 
   const [user, setUser] = useState(null);
-  const [route, setRoute] = useState("menu");
+  const [route, setRoute] = useHashRouter();
   const [lockReason, setLockReason] = useState("");
   const [toast, setToast] = useState(null);
   const inactivityRef = useRef(null);
@@ -120,7 +141,7 @@ function App() {
     clearToken();
     setLockReason(reason);
     setUser(null);
-    setRoute("menu");
+    setRoute("menu", { replace: true });
   };
 
   const completeSale = ({ total, items }) => {
@@ -131,7 +152,7 @@ function App() {
     });
     setTimeout(() => setToast(null), 3800);
     if (willLock) lock("Bloqueo automático tras cobro");
-    else setRoute("menu");
+    else setRoute("menu", { replace: true });
   };
 
   const TweaksUI = (
@@ -209,32 +230,32 @@ function App() {
         <SaleScreen
           user={user}
           onLock={lockBtn}
-          onBack={() => setRoute("menu")}
+          onBack={() => setRoute("menu", { replace: true })}
           onComplete={completeSale}
           lockAfterSale={t.lockAfterSale}
         />
       );
       break;
     case "analytics":
-      content = <Analytics user={user} onLock={lockBtn} onBack={() => setRoute("menu")}/>;
+      content = <Analytics user={user} onLock={lockBtn} onBack={() => setRoute("menu", { replace: true })}/>;
       break;
     case "inventory":
-      content = <Inventory user={user} onLock={lockBtn} onBack={() => setRoute("menu")}/>;
+      content = <Inventory user={user} onLock={lockBtn} onBack={() => setRoute("menu", { replace: true })}/>;
       break;
     case "progress":
-      content = <Progress user={user} onLock={lockBtn} onBack={() => setRoute("menu")}/>;
+      content = <Progress user={user} onLock={lockBtn} onBack={() => setRoute("menu", { replace: true })}/>;
       break;
     case "staff":
-      content = <Staff user={user} onLock={lockBtn} onBack={() => setRoute("menu")}/>;
+      content = <Staff user={user} onLock={lockBtn} onBack={() => setRoute("menu", { replace: true })}/>;
       break;
     case "reports":
-      content = <Reports user={user} onLock={lockBtn} onBack={() => setRoute("menu")} onNav={setRoute}/>;
+      content = <Reports user={user} onLock={lockBtn} onBack={() => setRoute("menu", { replace: true })} onNav={setRoute}/>;
       break;
     case "timeclock":
-      content = <TimeClock user={user} onLock={lockBtn} onBack={() => setRoute("menu")}/>;
+      content = <TimeClock user={user} onLock={lockBtn} onBack={() => setRoute("menu", { replace: true })}/>;
       break;
     case "settings":
-      content = <Settings user={user} onLock={lockBtn} onBack={() => setRoute("menu")}/>;
+      content = <Settings user={user} onLock={lockBtn} onBack={() => setRoute("menu", { replace: true })}/>;
       break;
     default:
       content = (

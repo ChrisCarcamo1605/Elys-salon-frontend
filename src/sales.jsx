@@ -25,6 +25,8 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
   const [payOpen, setPayOpen] = React.useState(false);
   const [cartOpen, setCartOpen] = React.useState(false);
   const [customerName, setCustomerName] = React.useState("");
+  const cartRef = React.useRef(null);
+  const cartTouch = React.useRef(null);
   const [loading, setLoading] = React.useState(false);
 
   React.useEffect(() => {
@@ -94,19 +96,25 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
 
   const removeLine = (id) => setCart((c) => c.filter((l) => l.id !== id));
 
-  const applyDiscount = (id, kind, value) => {
+  const applyDiscount = (id, kind, value, mode = 'discount') => {
     setCart((c) =>
       c.map((l) => {
         if (l.id !== id) return l;
         if (!kind) return { ...l, price: l.basePrice, discount: null };
-        const newPrice =
-          kind === "amount"
-            ? Math.max(0, l.basePrice - value)
+        let newPrice;
+        if (mode === 'surcharge') {
+          newPrice = kind === "amount"
+            ? +(l.basePrice + value).toFixed(2)
+            : +(l.basePrice * (1 + value / 100)).toFixed(2);
+        } else {
+          newPrice = kind === "amount"
+            ? Math.max(0, +(l.basePrice - value).toFixed(2))
             : Math.max(0, +(l.basePrice * (1 - value / 100)).toFixed(2));
+        }
         return {
           ...l,
           price: newPrice,
-          discount: { kind, value, saved: +(l.basePrice - newPrice).toFixed(2) },
+          discount: { kind, value, mode, saved: +(l.basePrice - newPrice).toFixed(2) },
         };
       })
     );
@@ -153,6 +161,48 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
   };
 
   const discLine = cart.find((l) => l.id === discountFor);
+
+  const onCartTouchStart = (e) => {
+    const el = cartRef.current;
+    if (!el) return;
+    e.preventDefault(); // prevent click from also firing after touch
+    cartTouch.current = { startY: e.touches[0].clientY, startOpen: cartOpen, lastDy: 0, moved: false };
+    el.style.transition = 'none';
+  };
+
+  const onCartTouchMove = (e) => {
+    const t = cartTouch.current;
+    if (!t) return;
+    e.preventDefault();
+    const dy = e.touches[0].clientY - t.startY;
+    t.lastDy = dy;
+    if (Math.abs(dy) > 6) t.moved = true;
+    const el = cartRef.current;
+    const maxSlide = el.offsetHeight - 66;
+    const base = t.startOpen ? 0 : maxSlide;
+    const clamped = Math.max(0, Math.min(maxSlide, base + dy));
+    el.style.transform = `translateY(${clamped}px)`;
+  };
+
+  const onCartTouchEnd = () => {
+    const t = cartTouch.current;
+    if (!t) return;
+    cartTouch.current = null;
+    const el = cartRef.current;
+    el.style.transition = '';
+    el.style.transform = '';
+    if (!t.moved) {
+      setCartOpen((o) => !o);
+      return;
+    }
+    const maxSlide = el.offsetHeight - 66;
+    const dy = t.lastDy;
+    if (t.startOpen) {
+      setCartOpen(dy < maxSlide * 0.35);
+    } else {
+      setCartOpen(dy < -(maxSlide * 0.3));
+    }
+  };
 
   return (
     <div className="screen sale-screen">
@@ -221,7 +271,7 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
                         {p.type === "S" ? "Servicio" : "Producto"}
                       </span>
                       {promo && (
-                        <span className="prod-promo-badge">{promo.off}</span>
+                        <span className="prod-promo-badge" title={promo.name}>{promo.off}</span>
                       )}
                       {inCart && (
                         <div className="prod-qty-badge">
@@ -232,6 +282,11 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
                   </div>
                   <div className="prod-body">
                     <div className="prod-name">{p.name}</div>
+                    {promo && (
+                      <div style={{ fontSize: 10, color: 'var(--magenta)', fontWeight: 600, marginTop: 1, marginBottom: 1 }}>
+                        {promo.name}
+                      </div>
+                    )}
                     <div className="prod-meta">
                       {p.duration && (
                         <span className="prod-dur">
@@ -281,8 +336,14 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
           </div>
         </section>
 
-        <aside className={`cart ${cartOpen ? "open" : ""}`}>
-          <div className="cart-head" onClick={() => setCartOpen((o) => !o)}>
+        <aside className={`cart ${cartOpen ? "open" : ""}`} ref={cartRef}>
+          <div
+            className="cart-head"
+            onClick={() => setCartOpen((o) => !o)}
+            onTouchStart={onCartTouchStart}
+            onTouchMove={onCartTouchMove}
+            onTouchEnd={onCartTouchEnd}
+          >
             <div className="cart-title">
               <Icons.Cart size={18} /> Carrito
             </div>
@@ -312,12 +373,12 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
                   <div className="line-name">
                     {l.name}
                     {l.discount && (
-                      <span className="line-tag">
+                      <span className="line-tag" style={l.discount.mode === 'surcharge' ? { color: 'var(--teal)', background: 'color-mix(in srgb, var(--teal) 12%, transparent)' } : {}}>
                         <Icons.Tag size={11} />
                         {l.discount.promoOff ?? (
-                          l.discount.kind === "amount"
-                            ? `-${fmtMoney(l.discount.value)}`
-                            : `-${l.discount.value}%`
+                          l.discount.mode === 'surcharge'
+                            ? (l.discount.kind === "amount" ? `+${fmtMoney(l.discount.value)}` : `+${l.discount.value}%`)
+                            : (l.discount.kind === "amount" ? `-${fmtMoney(l.discount.value)}` : `-${l.discount.value}%`)
                         )}
                       </span>
                     )}
@@ -329,7 +390,7 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
                     {l.discount ? (
                       <span className="line-price">
                         <s>{fmtMoney(l.basePrice)}</s>{" "}
-                        <b style={{ color: "var(--magenta)" }}>{fmtMoney(l.price)}</b>
+                        <b style={{ color: l.discount.mode === 'surcharge' ? "var(--teal)" : "var(--magenta)" }}>{fmtMoney(l.price)}</b>
                         {" c/u"}
                       </span>
                     ) : (
@@ -357,10 +418,10 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
                       <button
                         className="line-disc"
                         onClick={() => setDiscountFor(l.id)}
-                        title="Aplicar descuento"
+                        title="Ajustar precio"
                       >
                         <Icons.Tag size={13} />
-                        {l.discount ? "Editar" : "Descuento"}
+                        {l.discount ? "Editar" : "Ajustar"}
                       </button>
                     )}
                     <button
@@ -387,6 +448,12 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
                 <span>−{fmtMoney(savings)}</span>
               </div>
             )}
+            {savings < 0 && (
+              <div className="trow" style={{ color: 'var(--teal)', fontWeight: 600 }}>
+                <span>Recargos aplicados</span>
+                <span>+{fmtMoney(-savings)}</span>
+              </div>
+            )}
             <div className="trow t-grand">
               <span>Total</span>
               <span>{fmtMoney(total)}</span>
@@ -403,7 +470,7 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
           </button>
           {!canDiscount && (
             <div className="cart-note">
-              <Icons.Lock size={11} /> Descuentos requieren permiso especial.
+              <Icons.Lock size={11} /> Ajuste de precios requiere permiso especial.
             </div>
           )}
         </aside>
@@ -413,7 +480,7 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
         <DiscountModal
           line={discLine}
           onClose={() => setDiscountFor(null)}
-          onApply={(kind, value) => applyDiscount(discountFor, kind, value)}
+          onApply={(kind, value, mode) => applyDiscount(discountFor, kind, value, mode)}
           onClear={() => applyDiscount(discountFor, null)}
         />
       )}
@@ -432,25 +499,33 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
 }
 
 function DiscountModal({ line, onClose, onApply, onClear }) {
+  const [mode, setMode] = React.useState(line?.discount?.mode || 'discount');
   const [kind, setKind] = React.useState(line?.discount?.kind || "amount");
-  const [value, setValue] = React.useState(line?.discount?.value || 0);
+  const [value, setValue] = React.useState(line?.discount?.value ?? 0);
   if (!line) return null;
-  const preview =
-    kind === "amount"
-      ? Math.max(0, line.basePrice - +value)
-      : Math.max(0, +(line.basePrice * (1 - +value / 100)).toFixed(2));
 
-  const quick =
-    kind === "amount" ? [1, 2, 5, 10] : [5, 10, 15, 20];
+  const preview = mode === 'surcharge'
+    ? (kind === "amount"
+        ? +(line.basePrice + +value).toFixed(2)
+        : +(line.basePrice * (1 + +value / 100)).toFixed(2))
+    : (kind === "amount"
+        ? Math.max(0, +(line.basePrice - +value).toFixed(2))
+        : Math.max(0, +(line.basePrice * (1 - +value / 100)).toFixed(2)));
+
+  const diff = +(preview - line.basePrice).toFixed(2);
+  const quick = kind === "amount" ? [1, 2, 5, 10] : [5, 10, 15, 20];
+  const isSurcharge = mode === 'surcharge';
 
   return (
     <div className="modal-back" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div>
-            <div className="modal-eyebrow">Descuento exclusivo</div>
+            <div className="modal-eyebrow" style={isSurcharge ? { color: 'var(--teal)' } : {}}>
+              {isSurcharge ? 'Recargo al precio' : 'Descuento exclusivo'}
+            </div>
             <div className="modal-title">{line.name}</div>
-            <div className="modal-sub">Precio base ${line.basePrice}</div>
+            <div className="modal-sub">Precio base {fmtMoney(line.basePrice)}</div>
           </div>
           <button className="iconbtn" onClick={onClose}>
             <Icons.X size={16} />
@@ -458,6 +533,21 @@ function DiscountModal({ line, onClose, onApply, onClear }) {
         </div>
 
         <div className="disc-toggle">
+          <button
+            className={`disc-tog ${mode === 'discount' ? 'active' : ''}`}
+            onClick={() => setMode('discount')}
+          >
+            Descuento
+          </button>
+          <button
+            className={`disc-tog ${mode === 'surcharge' ? 'active' : ''}`}
+            onClick={() => setMode('surcharge')}
+          >
+            Recargo
+          </button>
+        </div>
+
+        <div className="disc-toggle" style={{ marginTop: 8 }}>
           <button
             className={`disc-tog ${kind === "amount" ? "active" : ""}`}
             onClick={() => setKind("amount")}
@@ -494,23 +584,28 @@ function DiscountModal({ line, onClose, onApply, onClear }) {
 
         <div className="disc-preview">
           <div>
-            <div className="dp-label">Precio final</div>
+            <div className="dp-label">Precio base</div>
             <div className="dp-old">{fmtMoney(line.basePrice)}</div>
           </div>
           <Icons.ArrowRight size={18} />
           <div>
             <div className="dp-label">Cliente paga</div>
-            <div className="dp-new">{fmtMoney(preview)}</div>
+            <div className="dp-new" style={isSurcharge ? { color: 'var(--teal)' } : {}}>
+              {fmtMoney(preview)}
+            </div>
           </div>
-          <div className="dp-saved">
-            Ahorra <b>{fmtMoney(line.basePrice - preview)}</b>
+          <div className="dp-saved" style={isSurcharge ? { color: 'var(--teal)' } : {}}>
+            {isSurcharge
+              ? <>Recargo de <b>+{fmtMoney(diff)}</b></>
+              : <>Ahorra <b>{fmtMoney(-diff)}</b></>
+            }
           </div>
         </div>
 
         <div className="modal-foot">
           {line.discount && (
             <button className="btn-ghost" onClick={onClear}>
-              Quitar descuento
+              Quitar ajuste
             </button>
           )}
           <button className="btn-ghost" onClick={onClose}>
@@ -518,7 +613,7 @@ function DiscountModal({ line, onClose, onApply, onClear }) {
           </button>
           <button
             className="btn-primary"
-            onClick={() => onApply(kind, +value || 0)}
+            onClick={() => onApply(kind, +value || 0, mode)}
           >
             Aplicar
           </button>

@@ -566,13 +566,17 @@ function Progress({ user, onLock, onBack }) {
   const [stats, setStats] = useState(user.monthStats || { totalSales: 0, retailSales: 0, servicesDone: 0, newClients: 0, tipsCollected: 0 });
   const [goalsData, setGoalsData] = useState([]);
   const [recentSales, setRecentSales] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
+  const fetchProgress = () => {
+    setRefreshing(true);
     goalsApi.progress('me').then((result) => {
       setGoalsData(result.goals);
       if (result.stats != null) setStats(result.stats);
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setRefreshing(false));
+  };
 
+  const fetchSales = () => {
     salesApi.list({ limit: 15 }).then((result) => {
       const items = result.items ?? [];
       const rows = [];
@@ -597,6 +601,13 @@ function Progress({ user, onLock, onBack }) {
       }
       setRecentSales(rows.slice(0, 15));
     }).catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchProgress();
+    fetchSales();
+    const interval = setInterval(fetchProgress, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const goalsWithProgress = goalsData.map((g) => {
@@ -624,6 +635,8 @@ function Progress({ user, onLock, onBack }) {
     green: { color: "#10b981", soft: "rgba(16,185,129,.10)" },
   };
 
+  const periodLabel = { monthly: 'Mes', biweekly: 'Quincena', none: 'Acumulado' };
+
   return (
     <div className="screen prog-screen">
       <TopBar user={user} title="Mi progreso" onLock={onLock} onBack={onBack} onLogout={onLock}/>
@@ -631,7 +644,18 @@ function Progress({ user, onLock, onBack }) {
         {/* Earnings summary */}
         <div className="earn-hero">
           <div className="earn-left">
-            <div className="ana-eyebrow">Pago variable · Mayo 2026</div>
+            <div className="ana-eyebrow" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span>Pago variable · {new Date().toLocaleDateString('es-SV', { month: 'long', year: 'numeric' })}</span>
+              <button
+                className="btn-ghost btn-sm"
+                onClick={fetchProgress}
+                disabled={refreshing}
+                style={{ padding: "2px 8px", fontSize: 11 }}
+                title="Actualizar progreso"
+              >
+                <Icons.Refresh size={11}/> {refreshing ? "..." : "Actualizar"}
+              </button>
+            </div>
             <div className="earn-hero-title">
               Llevas <span style={{ color: "#10b981" }}>{fmtMoney(totalEarned)}</span> en bonos asegurados
             </div>
@@ -674,11 +698,16 @@ function Progress({ user, onLock, onBack }) {
                     <div className="goal-label">{g.label}</div>
                     <div className="goal-desc">{g.desc}</div>
                   </div>
-                  {g.achieved && (
-                    <div className="goal-badge">
-                      <Icons.Check size={11}/> Logrado
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                    {g.achieved && (
+                      <div className="goal-badge">
+                        <Icons.Check size={11}/> Logrado
+                      </div>
+                    )}
+                    <div style={{ fontSize: 10, color: "var(--ink-dim)", whiteSpace: "nowrap" }}>
+                      {periodLabel[g.resetPeriod] || "Mes"}
                     </div>
-                  )}
+                  </div>
                 </div>
 
                 <div className="goal-progress">
@@ -1648,15 +1677,43 @@ function CatalogItemModal({ item, categories, onClose, onSave }) {
 
 function SettingCategories({ onSave }) {
   const [cats, setCats] = useState([]);
+  const [dragIdx, setDragIdx] = useState(null);
+  const [dragOver, setDragOver] = useState(null);
+  const containerRef = useRef(null);
+  const touchDragRef = useRef(null);
+  const catsRef = useRef(cats);
+  useEffect(() => { catsRef.current = cats; }, [cats]);
 
   useEffect(() => {
     categoriesApi.list().then((items) => setCats(items)).catch(() => {});
   }, []);
 
+  // Non-passive touchmove so preventDefault() stops page scroll during drag
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onTouchMove = (e) => {
+      if (!touchDragRef.current) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      const target = document.elementFromPoint(touch.clientX, touch.clientY);
+      const chip = target?.closest('.cat-chip:not(.add)');
+      if (!chip) return;
+      const chips = el.querySelectorAll('.cat-chip:not(.add)');
+      const idx = Array.from(chips).indexOf(chip);
+      if (idx !== -1 && idx !== touchDragRef.current.over) {
+        touchDragRef.current.over = idx;
+        setDragOver(idx);
+      }
+    };
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => el.removeEventListener('touchmove', onTouchMove);
+  }, []);
+
   const handleAdd = () => {
     const name = (window.prompt("Nombre de la nueva categoría") || "").trim();
     if (!name) return;
-    categoriesApi.create({ label: name }).then((created) => {
+    categoriesApi.create({ label: name, ordering: cats.length }).then((created) => {
       setCats((prev) => [...prev, created]);
       onSave(name);
     }).catch((err) => onSave(`Error: ${apiError(err)}`));
@@ -1669,11 +1726,72 @@ function SettingCategories({ onSave }) {
     }).catch((err) => onSave(`Error: ${apiError(err)}`));
   };
 
+  const handleDragStart = (e, idx) => {
+    setDragIdx(idx);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e, idx) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (idx !== dragOver) setDragOver(idx);
+  };
+
+  const reorder = (fromIdx, toIdx) => {
+    if (fromIdx === null || toIdx === null || fromIdx === toIdx) return;
+    const newCats = [...catsRef.current];
+    const [moved] = newCats.splice(fromIdx, 1);
+    newCats.splice(toIdx, 0, moved);
+    const reordered = newCats.map((c, i) => ({ ...c, ordering: i }));
+    setCats(reordered);
+    reordered.forEach((c, i) => {
+      categoriesApi.update(c.id, { ordering: i }).catch(() => {});
+    });
+    onSave("Orden actualizado");
+  };
+
+  const handleDrop = (e, idx) => {
+    e.preventDefault();
+    const from = dragIdx;
+    setDragIdx(null);
+    setDragOver(null);
+    reorder(from, idx);
+  };
+
+  const handleDragEnd = () => {
+    setDragIdx(null);
+    setDragOver(null);
+  };
+
+  const handleTouchStart = (idx) => {
+    touchDragRef.current = { from: idx, over: idx };
+    setDragIdx(idx);
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchDragRef.current) return;
+    const { from, over } = touchDragRef.current;
+    touchDragRef.current = null;
+    setDragIdx(null);
+    setDragOver(null);
+    reorder(from, over);
+  };
+
   return (
     <div className="set-card">
-      <div className="cat-chips">
-        {cats.map((c) => (
-          <div className="cat-chip" key={c.id}>
+      <div className="cat-chips" ref={containerRef} onTouchEnd={handleTouchEnd}>
+        {cats.map((c, i) => (
+          <div
+            className={`cat-chip${dragIdx === i ? " dragging" : ""}${dragOver === i && dragIdx !== i ? " drag-over" : ""}`}
+            key={c.id}
+            draggable
+            onDragStart={(e) => handleDragStart(e, i)}
+            onDragOver={(e) => handleDragOver(e, i)}
+            onDrop={(e) => handleDrop(e, i)}
+            onDragEnd={handleDragEnd}
+            onTouchStart={() => handleTouchStart(i)}
+          >
+            <Icons.Grip size={13} className="cat-grip" />
             <span>{c.label}</span>
             <button title="Quitar" onClick={() => handleRemove(c.id)}><Icons.X size={11}/></button>
           </div>
@@ -1683,7 +1801,7 @@ function SettingCategories({ onSave }) {
         </button>
       </div>
       <div style={{ marginTop: 14, fontSize: 12, color: "var(--ink-dim)" }}>
-        Arrastra para reordenar el orden en que aparecen en la pantalla de ventas.
+        Arrastra las categorías para cambiar el orden en que aparecen en ventas.
       </div>
     </div>
   );
@@ -1818,14 +1936,19 @@ function SettingPromos({ section, onSave }) {
         <div style={{ marginBottom: 16 }}>
           <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Productos y servicios incluidos</label>
           <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, padding: 8 }}>
-            {catalogItems.map((it) => (
-              <label key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', cursor: 'pointer', fontSize: 13 }}>
-                <input type="checkbox" checked={selIds.includes(it.id)} onChange={() => toggleItem(it.id)} />
-                <span className={`pill p-${it.type}`} style={{ fontSize: 9 }}>{it.type === 'S' ? 'S' : 'P'}</span>
-                <span>{it.name}</span>
-                <span style={{ marginLeft: 'auto', color: 'var(--ink-dim)', fontSize: 12 }}>${it.price}</span>
-              </label>
-            ))}
+            {catalogItems.map((it) => {
+              const otherPromo = (it.promotions ?? []).find((pr) => pr.id !== editing.id);
+              const blockedByOther = !!otherPromo && !selIds.includes(it.id);
+              return (
+                <label key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', cursor: blockedByOther ? 'not-allowed' : 'pointer', fontSize: 13, opacity: blockedByOther ? 0.45 : 1 }} title={blockedByOther ? `Ya tiene la promo "${otherPromo.name}"` : undefined}>
+                  <input type="checkbox" checked={selIds.includes(it.id)} onChange={() => !blockedByOther && toggleItem(it.id)} disabled={blockedByOther} />
+                  <span className={`pill p-${it.type}`} style={{ fontSize: 9 }}>{it.type === 'S' ? 'S' : 'P'}</span>
+                  <span>{it.name}</span>
+                  {blockedByOther && <span style={{ fontSize: 10, color: 'var(--magenta)', marginLeft: 4 }}>{otherPromo.name}</span>}
+                  <span style={{ marginLeft: 'auto', color: 'var(--ink-dim)', fontSize: 12 }}>${it.price}</span>
+                </label>
+              );
+            })}
           </div>
           <div style={{ fontSize: 11, color: 'var(--ink-dim)', marginTop: 4 }}>{selIds.length} seleccionado{selIds.length !== 1 ? 's' : ''}</div>
         </div>
@@ -2260,6 +2383,7 @@ function SettingGoals({ onSave }) {
     rewardType: "fixed",
     rewardValue: 10,
     tone: "magenta",
+    resetPeriod: "monthly",
   });
 
   const toneMap = {
@@ -2283,6 +2407,10 @@ function SettingGoals({ onSave }) {
               <div className="goal-edit-stat">
                 <div className="info-label">Meta</div>
                 <div className="info-val">{g.unit}{g.target}</div>
+              </div>
+              <div className="goal-edit-stat">
+                <div className="info-label">Período</div>
+                <div className="info-val">{{ monthly: "Mensual", biweekly: "Quincenal", none: "Acumulado" }[g.resetPeriod] || "Mensual"}</div>
               </div>
               <div className="goal-edit-stat">
                 <div className="info-label">Recompensa</div>
@@ -2483,6 +2611,19 @@ function GoalModal({ goal, onClose, onSave }) {
               onChange={(e) => upd("reward", e.target.value)}
               onFocus={formatReward}
             />
+          </label>
+
+          <label className="form-row form-row-full">
+            <span className="form-label">Período de reinicio</span>
+            <select
+              className="form-input"
+              value={g.resetPeriod || "monthly"}
+              onChange={(e) => upd("resetPeriod", e.target.value)}
+            >
+              <option value="monthly">Mensual (reinicia el 1 de cada mes)</option>
+              <option value="biweekly">Quincenal (reinicia el 1 y el 16 de cada mes)</option>
+              <option value="none">Sin reinicio (acumulado total)</option>
+            </select>
           </label>
 
           <div className="form-row">

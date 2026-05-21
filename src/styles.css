@@ -2584,7 +2584,11 @@ select.form-input { appearance: none; padding-right: 32px; cursor: pointer;
   font-size: 13px;
   font-weight: 600;
   border: 1px solid transparent;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
 }
+.cat-chip:active { cursor: grabbing; }
 [data-theme="dark"] .cat-chip { color: var(--magenta); }
 .cat-chip button {
   border: none;
@@ -2605,6 +2609,12 @@ select.form-input { appearance: none; padding-right: 32px; cursor: pointer;
   font-family: inherit;
 }
 .cat-chip.add:hover { color: var(--magenta); border-color: var(--magenta); }
+.cat-chip.dragging { opacity: 0.35; }
+.cat-chip.drag-over {
+  border-color: var(--magenta);
+  box-shadow: 0 0 0 2px var(--magenta-soft);
+}
+.cat-grip { opacity: 0.45; flex-shrink: 0; }
 
 /* Promos */
 .prod-promo-badge {
