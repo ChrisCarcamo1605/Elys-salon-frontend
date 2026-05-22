@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Vite lee las variables desde import.meta.env
-const BASE = import.meta.env.VITE_API_BASE_URL || 'https://elys-salon-backend-dev.up.railway.app/';
+const BASE = import.meta.env.VITE_API_BASE_URL || 'https://elys-salon-backend-dev.up.railway.app/api';
 
 console.log('API base URL:', BASE);
 const http = axios.create({
@@ -35,9 +35,9 @@ http.interceptors.response.use(
 
 let _token = null;
 
-export function setToken(t)  { _token = t; }
+export function setToken(t) { _token = t; }
 export function clearToken() { _token = null; }
-export function getToken()   { return _token; }
+export function getToken() { return _token; }
 
 // ─── Adapters: backend ↔ frontend shape translation ──────────────────────────
 
@@ -195,7 +195,7 @@ export const auth = {
 
   /** Invalida el token actual (auditoría). No lanza si falla. */
   lock: () =>
-    http.post('/auth/lock').catch(() => {}),
+    http.post('/auth/lock').catch(() => { }),
 
   /** Hidrata sesión desde token guardado en memoria */
   me: () =>
@@ -363,16 +363,16 @@ function fromSaleItem(s) {
     date: dateStr ?? null,
     time: timeRaw ? timeRaw.slice(0, 5) : null,
     voided: s.status === 'voided',
-    total:         s.total         != null ? Number(s.total)         : 0,
-    subtotal:      s.subtotal      != null ? Number(s.subtotal)      : 0,
-    tip:           s.tip           != null ? Number(s.tip)           : 0,
+    total: s.total != null ? Number(s.total) : 0,
+    subtotal: s.subtotal != null ? Number(s.subtotal) : 0,
+    tip: s.tip != null ? Number(s.tip) : 0,
     discountTotal: s.discountTotal != null ? Number(s.discountTotal) : 0,
     lines: (s.lines ?? []).map((l) => ({
       ...l,
-      price:         l.price         != null ? Number(l.price)         : 0,
-      basePrice:     l.basePrice     != null ? Number(l.basePrice)     : 0,
+      price: l.price != null ? Number(l.price) : 0,
+      basePrice: l.basePrice != null ? Number(l.basePrice) : 0,
       discountValue: l.discountValue != null ? Number(l.discountValue) : 0,
-      qty:           l.qty           != null ? Number(l.qty)           : 1,
+      qty: l.qty != null ? Number(l.qty) : 1,
     })),
     payments: (s.payments ?? []).map((p) => ({
       ...p,
@@ -690,11 +690,11 @@ function fromKpis(raw) {
   return {
     ...raw,
     items: [
-      { label: 'Ventas totales',  value: totalSales,  delta: salesDelta, tone: salesDelta >= 0 ? 'up' : 'down' },
-      { label: 'Utilidad neta',   value: totalProfit, delta: null,       tone: 'up' },
-      { label: 'Margen',          value: margin,      delta: null,       tone: 'up' },
-      { label: 'Ticket promedio', value: avgTicket,   delta: null,       tone: 'up' },
-      { label: 'Tickets',         value: ticketCount, delta: null,       tone: 'up' },
+      { label: 'Ventas totales', value: totalSales, delta: salesDelta, tone: salesDelta >= 0 ? 'up' : 'down' },
+      { label: 'Utilidad neta', value: totalProfit, delta: null, tone: 'up' },
+      { label: 'Margen', value: margin, delta: null, tone: 'up' },
+      { label: 'Ticket promedio', value: avgTicket, delta: null, tone: 'up' },
+      { label: 'Tickets', value: ticketCount, delta: null, tone: 'up' },
     ],
   };
 }
@@ -752,13 +752,13 @@ export const reports = {
 // ─── Subida de archivos ───────────────────────────────────────────────────────
 
 export const upload = {
-  /** Sube una imagen al almacenamiento y devuelve la URL pública */
+  /** Sube una imagen y devuelve { key, signedUrl }. Guardar key en BD; signedUrl para preview inmediato. */
   image: (file) => {
     const fd = new FormData();
     fd.append('file', file);
     return http
-      .post('/upload/image', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-      .then((r) => r.data.url);
+      .post('/upload/image', fd)
+      .then((r) => r.data);
   },
 };
 
@@ -773,9 +773,9 @@ export const settings = {
     const arr = Array.isArray(body)
       ? body
       : Object.entries(body ?? {}).map(([key, value]) => ({
-          key,
-          value: typeof value === 'object' && value !== null ? value : { value },
-        }));
+        key,
+        value: typeof value === 'object' && value !== null ? value : { value },
+      }));
     return http.put('/settings', arr).then((r) => r.data);
   },
 
