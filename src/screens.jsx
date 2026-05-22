@@ -1525,10 +1525,12 @@ function CatalogItemModal({ item, categories, onClose, onSave }) {
   const [it, setIt] = useState(item);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
+  const [imagePreview, setImagePreview] = useState(item?.image || null);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     setIt(item);
+    setImagePreview(item?.image || null);
     setUploadError(null);
   }, [item?.id]);
 
@@ -1544,7 +1546,7 @@ function CatalogItemModal({ item, categories, onClose, onSave }) {
     setUploadError(null);
     setUploading(true);
     uploadApi.image(file)
-      .then((url) => upd("image", url))
+      .then(({ key, signedUrl }) => { upd("image", key); setImagePreview(signedUrl); })
       .catch(() => setUploadError("Error al subir la foto. Intenta de nuevo."))
       .finally(() => setUploading(false));
   };
@@ -1570,13 +1572,13 @@ function CatalogItemModal({ item, categories, onClose, onSave }) {
         <div
           className="cat-edit-preview"
           style={{
-            backgroundImage: it.image ? `url(${it.image})` : undefined,
+            backgroundImage: imagePreview ? `url(${imagePreview})` : undefined,
             cursor: "pointer",
             position: "relative",
           }}
           onClick={() => !uploading && fileInputRef.current?.click()}
         >
-          {!it.image && !uploading && (
+          {!imagePreview && !uploading && (
             <div style={{
               position: "absolute", inset: 0, display: "flex", flexDirection: "column",
               alignItems: "center", justifyContent: "center", gap: 6,
@@ -1595,7 +1597,7 @@ function CatalogItemModal({ item, categories, onClose, onSave }) {
               Subiendo…
             </div>
           )}
-          {it.image && !uploading && (
+          {imagePreview && !uploading && (
             <div style={{
               position: "absolute", bottom: 8, right: 8,
             }}>
@@ -1724,7 +1726,7 @@ function CatalogItemModal({ item, categories, onClose, onSave }) {
               className="form-input"
               placeholder="o pega una URL directamente…"
               value={it.image || ""}
-              onChange={(e) => upd("image", e.target.value)}
+              onChange={(e) => { upd("image", e.target.value); setImagePreview(e.target.value || null); }}
             />
           </label>
         </div>
