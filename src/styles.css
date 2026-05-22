@@ -50,6 +50,37 @@
   --pad: 12px;
 }
 
+/* ============================================================
+   SCROLLBARS
+   ============================================================ */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-2) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--border-2);
+  border-radius: 99px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-faint);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 * { box-sizing: border-box; }
 
 html, body, #root {
@@ -2265,6 +2296,11 @@ select.form-input { appearance: none; padding-right: 32px; cursor: pointer;
 /* ============================================================
    SETTINGS — master-detail
    ============================================================ */
+
+.settings-screen {
+  height: 100dvh;
+  overflow: hidden;
+}
 
 .settings-shell {
   flex: 1;

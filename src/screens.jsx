@@ -1140,7 +1140,6 @@ function SettingPanel({ section, onSave }) {
 function SaveBar({ onSave, label = "Cambios guardados" }) {
   return (
     <div className="save-bar">
-      <button className="btn-ghost">Cancelar</button>
       <button className="btn-primary" onClick={() => onSave(label)}>
         <Icons.Check size={14}/> Guardar
       </button>
