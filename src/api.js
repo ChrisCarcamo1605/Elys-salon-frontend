@@ -749,6 +749,19 @@ export const reports = {
     http.get(`/reports/${type}/pdf`, { params, responseType: 'blob' }).then((r) => r.data),
 };
 
+// ─── Subida de archivos ───────────────────────────────────────────────────────
+
+export const upload = {
+  /** Sube una imagen al almacenamiento y devuelve la URL pública */
+  image: (file) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return http
+      .post('/upload/image', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      .then((r) => r.data.url);
+  },
+};
+
 // ─── Ajustes ─────────────────────────────────────────────────────────────────
 
 export const settings = {

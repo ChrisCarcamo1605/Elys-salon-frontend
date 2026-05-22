@@ -3309,6 +3309,8 @@ select.form-input { appearance: none; padding-right: 32px; cursor: pointer;
   border-radius: var(--radius-sm);
   margin-bottom: 18px;
   border: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
 }
 
 .margin-pill {
@@ -4484,10 +4486,15 @@ select.form-input { appearance: none; padding-right: 32px; cursor: pointer;
   .reports-grid { grid-template-columns: 1fr; }
 
   /* SETTINGS — mobile drawer */
+  .settings-screen {
+    height: 100dvh;
+    overflow: hidden;
+  }
   .settings-shell {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr;
     position: relative;
+    height: 100%;
   }
   .settings-nav {
     position: fixed;

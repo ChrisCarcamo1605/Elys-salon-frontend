@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Icons } from './icons.jsx';
 import { TopBar } from './menu.jsx';
 import { ConfirmModal, EmployeeModal, PinChangeModal } from './staff.jsx';
-import { catalog as catalogApi, inventory as inventoryApi, goals as goalsApi, categories as categoriesApi, promotions as promotionsApi, permissions as permissionsApi, staff as staffApi, settings as settingsApi, sales as salesApi, apiError } from './api.js';
+import { catalog as catalogApi, inventory as inventoryApi, goals as goalsApi, categories as categoriesApi, promotions as promotionsApi, permissions as permissionsApi, staff as staffApi, settings as settingsApi, sales as salesApi, upload as uploadApi, apiError } from './api.js';
 import { fmtMoney } from './utils.js';
 
 // Inventory, Progress, Team, Settings screens
@@ -974,9 +974,14 @@ function Settings({ user, onLock, onBack }) {
   const [activeId, setActiveId] = useState(DEFAULT_SECTIONS[0].id);
   const [navOpen, setNavOpen] = useState(() => typeof window !== 'undefined' && window.innerWidth > 840);
   const [toast, setToast] = useState(null);
+  const contentRef = useRef(null);
   const groups = [...new Set(sections.map((s) => s.group))];
   const active = sections.find((s) => s.id === activeId);
   const showToast = (title, sub) => { setToast({ title, sub }); setTimeout(() => setToast(null), 2800); };
+
+  useEffect(() => {
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  }, [activeId]);
 
   useEffect(() => {
     settingsApi.get().then((result) => {
@@ -1022,7 +1027,7 @@ function Settings({ user, onLock, onBack }) {
   }, []);
 
   return (
-    <div className="screen">
+    <div className="screen settings-screen">
       <TopBar user={user} title="Ajustes" onLock={onLock} onBack={onBack} onLogout={onLock}/>
       <div className={`settings-shell ${navOpen ? "nav-open" : ""}`}>
         <button
@@ -1069,7 +1074,7 @@ function Settings({ user, onLock, onBack }) {
           ))}
         </aside>
 
-        <main className="settings-content">
+        <main className="settings-content" ref={contentRef}>
           <button
             className="settings-mobile-toggle"
             onClick={() => setNavOpen(true)}
@@ -1518,15 +1523,31 @@ function SettingCatalog({ filter, onSave }) {
 
 function CatalogItemModal({ item, categories, onClose, onSave }) {
   const [it, setIt] = useState(item);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     setIt(item);
+    setUploadError(null);
   }, [item?.id]);
 
   const upd = (k, v) => setIt((p) => ({ ...p, [k]: v }));
   const isNew = !item.name;
   const isProduct = it.type === "P";
-  const valid = it.name.trim() && +it.price >= 0;
+  const valid = it.name.trim() && +it.price >= 0 && !uploading;
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setUploadError(null);
+    setUploading(true);
+    uploadApi.image(file)
+      .then((url) => upd("image", url))
+      .catch(() => setUploadError("Error al subir la foto. Intenta de nuevo."))
+      .finally(() => setUploading(false));
+  };
 
   return (
     <div className="modal-back" onClick={onClose}>
@@ -1546,11 +1567,62 @@ function CatalogItemModal({ item, categories, onClose, onSave }) {
           </button>
         </div>
 
-        {it.image && (
-          <div
-            className="cat-edit-preview"
-            style={{ backgroundImage: `url(${it.image})` }}
-          />
+        <div
+          className="cat-edit-preview"
+          style={{
+            backgroundImage: it.image ? `url(${it.image})` : undefined,
+            cursor: "pointer",
+            position: "relative",
+          }}
+          onClick={() => !uploading && fileInputRef.current?.click()}
+        >
+          {!it.image && !uploading && (
+            <div style={{
+              position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center", gap: 6,
+              color: "var(--ink-dim)", fontSize: 13,
+            }}>
+              <Icons.Plus size={20}/>
+              <span>Agregar foto</span>
+            </div>
+          )}
+          {uploading && (
+            <div style={{
+              position: "absolute", inset: 0, display: "flex", alignItems: "center",
+              justifyContent: "center", background: "rgba(0,0,0,.35)", color: "#fff",
+              fontSize: 13, fontWeight: 600, gap: 8,
+            }}>
+              Subiendo…
+            </div>
+          )}
+          {it.image && !uploading && (
+            <div style={{
+              position: "absolute", bottom: 8, right: 8,
+            }}>
+              <button
+                type="button"
+                className="btn-ghost btn-sm"
+                style={{ background: "rgba(0,0,0,.5)", color: "#fff", border: "none" }}
+                onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+              >
+                Cambiar foto
+              </button>
+            </div>
+          )}
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={handleFileChange}
+        />
+
+        {uploadError && (
+          <div style={{ color: "var(--magenta)", fontSize: 12, padding: "4px 0 0" }}>
+            {uploadError}
+          </div>
         )}
 
         <div className="form-grid">
@@ -1650,7 +1722,7 @@ function CatalogItemModal({ item, categories, onClose, onSave }) {
             <span className="form-label">URL de imagen</span>
             <input
               className="form-input"
-              placeholder="https://…"
+              placeholder="o pega una URL directamente…"
               value={it.image || ""}
               onChange={(e) => upd("image", e.target.value)}
             />

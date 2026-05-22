@@ -28,6 +28,7 @@ function useHashRouter() {
     if (replace) history.replaceState(null, '', hash);
     else history.pushState(null, '', hash);
     setRouteState(name);
+    window.scrollTo(0, 0);
   }, []);
 
   return [route, navigate];
@@ -113,12 +114,12 @@ function App() {
         setUser(null);
       }, (t.lockTimeoutSec || 120) * 1000);
     };
-    const evts = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"];
-    evts.forEach((e) => window.addEventListener(e, reset, { passive: true }));
+    const evts = ["mousemove", "mousedown", "keydown", "touchstart", "touchmove", "scroll"];
+    evts.forEach((e) => window.addEventListener(e, reset, { passive: true, capture: true }));
     reset();
     return () => {
       clearTimeout(inactivityRef.current);
-      evts.forEach((e) => window.removeEventListener(e, reset));
+      evts.forEach((e) => window.removeEventListener(e, reset, { capture: true }));
     };
   }, [user, t.lockTimeoutSec]);
 
