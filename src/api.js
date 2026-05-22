@@ -756,8 +756,9 @@ export const upload = {
   image: (file) => {
     const fd = new FormData();
     fd.append('file', file);
+    const token = getToken();
     return http
-      .post('/upload/image', fd)
+      .post('/upload/image', fd, token ? { headers: { Authorization: `Bearer ${token}` } } : {})
       .then((r) => r.data);
   },
 };
