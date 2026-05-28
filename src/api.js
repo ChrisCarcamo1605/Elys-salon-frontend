@@ -201,8 +201,9 @@ export const auth = {
 
   /** PIN + deviceToken → { token, user, monthStats } */
   unlock: (pin) => {
-    const deviceToken = getDeviceToken()
-      || (import.meta.env.DEV ? '__dev__' : '');
+    const deviceToken = import.meta.env.VITE_BYPASS_AUTH === 'true'
+      ? '__dev__'
+      : (getDeviceToken() || '');
     return http.post('/auth/unlock', { pin, deviceToken }).then((r) => ({
       ...r.data,
       user: fromUser(r.data.user),

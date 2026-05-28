@@ -151,25 +151,37 @@ function LockScreen({ onUnlock, onDeviceExpired, reason }) {
           }
         </div>
 
-        {import.meta.env.DEV && (
-          <div className="lock-dev-hint">
-            <span className="lock-dev-badge">DEV</span>
-            admin <strong>1234</strong> · empleada <strong>2222</strong>
-          </div>
-        )}
       </div>
 
       {/* Desktop bottom user pills */}
       {hints.length > 0 && (
         <div className="lock-pills">
-          {hints.map((u) => (
-            <div className="lock-pill" key={u.id}>
-              <div className="lock-pill-avatar" style={{ background: u.color }}>
-                {u.initials}
-              </div>
-              <span className="lock-pill-name">{u.name}</span>
-            </div>
-          ))}
+          {hints.map((u) => {
+            const devPin = import.meta.env.DEV
+              ? (u.role === 'admin' ? '1234' : '2222')
+              : null;
+            return (
+              <button
+                key={u.id}
+                className="lock-pill"
+                style={{ cursor: devPin ? 'pointer' : 'default', background: 'none', border: 'none', padding: 0 }}
+                onClick={() => { if (devPin) { setPin(''); setError(''); setTimeout(() => setPin(devPin), 0); setTimeout(() => trySubmit(devPin), 120); } }}
+                title={devPin ? `PIN: ${devPin} (clic para autocompletar)` : undefined}
+              >
+                <div className="lock-pill-avatar" style={{ background: u.color }}>
+                  {u.initials}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <span className="lock-pill-name">{u.name}</span>
+                  {devPin && (
+                    <span style={{ fontSize: 10, color: '#fbbf24', fontWeight: 700, letterSpacing: '0.1em' }}>
+                      PIN: {devPin}
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
