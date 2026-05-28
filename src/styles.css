@@ -5005,3 +5005,61 @@ select.form-input { appearance: none; padding-right: 32px; cursor: pointer;
   .sh-th:nth-child(1) { display: none; }
   .sh-detail { padding: 16px 14px 18px; }
 }
+
+/* ============================================================
+   WAKE-UP / COLD-START SCREEN
+   ============================================================ */
+.wakeup-root {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+}
+
+.wakeup-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 48px 40px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  max-width: 340px;
+  width: 90%;
+  text-align: center;
+}
+
+.wakeup-logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--border);
+}
+.wakeup-logo img { width: 100%; height: 100%; object-fit: cover; }
+
+.wakeup-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--border);
+  border-top-color: var(--magenta);
+  border-radius: 50%;
+  animation: wakeup-spin 0.9s linear infinite;
+}
+@keyframes wakeup-spin {
+  to { transform: rotate(360deg); }
+}
+
+.wakeup-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.wakeup-sub {
+  font-size: 12px;
+  color: var(--ink-dim);
+  line-height: 1.5;
+  max-width: 240px;
+}

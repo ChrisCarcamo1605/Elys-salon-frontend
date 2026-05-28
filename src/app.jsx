@@ -3,7 +3,7 @@ import { useTweaks, TweaksPanel, TweakSection, TweakToggle, TweakColor, TweakRad
 import { Icons } from './icons.jsx';
 import { LockScreen } from './lockscreen.jsx';
 import { LoginScreen } from './login.jsx';
-import { setToken, clearToken, getDeviceToken, setDeviceToken, clearDeviceToken, auth, settings as settingsApi } from './api.js';
+import { setToken, clearToken, getDeviceToken, setDeviceToken, clearDeviceToken, auth, staff as staffApi, settings as settingsApi } from './api.js';
 import { fmtMoney } from './utils.js';
 import { TopBar, MainMenu } from './menu.jsx';
 import { SaleScreen } from './sales.jsx';
@@ -60,6 +60,27 @@ const TWEAK_DEFAULTS = {
 };
 
 const BYPASS_AUTH = import.meta.env.VITE_BYPASS_AUTH === 'true';
+
+function WakeUpScreen({ waking }) {
+  return (
+    <div className="wakeup-root">
+      <div className="wakeup-card">
+        <div className="wakeup-logo">
+          <img src="/assets/logo.jpg" alt="Ely's Salón" />
+        </div>
+        <div className="wakeup-spinner" />
+        <div className="wakeup-title">
+          {waking ? 'Iniciando servicio…' : 'Conectando…'}
+        </div>
+        {waking && (
+          <div className="wakeup-sub">
+            El servidor está despertando, esto puede tomar unos segundos.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 const DEV_USER = {
   id: 0, name: 'Dev Admin', role: 'admin',
   color: '#de0fab', initials: 'DA', permissions: {},
@@ -86,9 +107,40 @@ function App() {
   const [route, setRoute] = useHashRouter();
   const [lockReason, setLockReason] = useState("");
   const [toast, setToast] = useState(null);
+  const [apiStatus, setApiStatus] = useState('checking'); // 'checking' | 'waking' | 'ready'
+  const [staffHints, setStaffHints] = useState([]);
   const inactivityRef = useRef(null);
   const setTweakRef = useRef(setTweak);
   setTweakRef.current = setTweak;
+
+  // Ping backend on mount; show wake-up screen if cold-starting
+  useEffect(() => {
+    let cancelled = false;
+    let wakingTimer = null;
+
+    const ping = () => {
+      staffApi.public()
+        .then((items) => {
+          if (cancelled) return;
+          clearTimeout(wakingTimer);
+          setStaffHints(Array.isArray(items) ? items : []);
+          setApiStatus('ready');
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setTimeout(ping, 4000);
+        });
+    };
+
+    // Show waking screen only after 500ms to avoid flicker on fast backends
+    wakingTimer = setTimeout(() => {
+      if (!cancelled) setApiStatus('waking');
+    }, 500);
+
+    ping();
+
+    return () => { cancelled = true; clearTimeout(wakingTimer); };
+  }, []);
 
   // Load persisted lock settings from API and sync on updates
   useEffect(() => {
@@ -236,6 +288,10 @@ function App() {
       setHasDeviceToken(false);
     };
 
+    if (apiStatus !== 'ready') {
+      return <WakeUpScreen waking={apiStatus === 'waking'} />;
+    }
+
     return (
       <>
         {hasDeviceToken
@@ -244,6 +300,7 @@ function App() {
               onUnlock={onUnlock}
               onDeviceExpired={onDeviceExpired}
               reason={lockReason}
+              hints={staffHints}
             />
           )
           : (

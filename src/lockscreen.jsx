@@ -1,20 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Icons } from './icons.jsx';
-import { auth, staff as staffApi, apiError } from './api.js';
+import { auth, apiError } from './api.js';
 
-function LockScreen({ onUnlock, onDeviceExpired, reason }) {
+function LockScreen({ onUnlock, onDeviceExpired, reason, hints = [] }) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [shake, setShake] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [hints, setHints] = useState([]);
   const [now, setNow] = useState(new Date());
-
-  useEffect(() => {
-    staffApi.public()
-      .then((items) => { if (Array.isArray(items)) setHints(items); })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000 * 30);
