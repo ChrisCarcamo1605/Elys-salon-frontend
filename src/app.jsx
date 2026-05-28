@@ -59,6 +59,13 @@ const TWEAK_DEFAULTS = {
   "lockOnSwitch": true,
 };
 
+const BYPASS_AUTH = import.meta.env.VITE_BYPASS_AUTH === 'true';
+const DEV_USER = {
+  id: 0, name: 'Dev Admin', role: 'admin',
+  color: '#de0fab', initials: 'DA', permissions: {},
+  monthStats: { totalSales: 0, retailSales: 0, servicesDone: 0, newClients: 0, tipsCollected: 0 },
+};
+
 function App() {
   const cookiePrefs = readCookie() || {};
   const mergedDefaults = { ...TWEAK_DEFAULTS, ...cookiePrefs };
@@ -72,9 +79,9 @@ function App() {
     writeCookie({ ...prev, ...edits });
   }, [setTweakRaw]);
 
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(BYPASS_AUTH ? DEV_USER : null);
   const [hasDeviceToken, setHasDeviceToken] = useState(
-    () => import.meta.env.DEV || !!getDeviceToken(),
+    () => BYPASS_AUTH || import.meta.env.DEV || !!getDeviceToken(),
   );
   const [route, setRoute] = useHashRouter();
   const [lockReason, setLockReason] = useState("");
@@ -129,6 +136,7 @@ function App() {
 
   // Listen for session expiry (401 from api.js)
   useEffect(() => {
+    if (BYPASS_AUTH) return;
     const onExpired = () => lock("Sesión expirada — vuelve a ingresar tu PIN");
     window.addEventListener('elys:session-expired', onExpired);
     return () => window.removeEventListener('elys:session-expired', onExpired);
