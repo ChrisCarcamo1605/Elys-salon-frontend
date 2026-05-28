@@ -157,9 +157,7 @@ function LockScreen({ onUnlock, onDeviceExpired, reason }) {
       {hints.length > 0 && (
         <div className="lock-pills">
           {hints.map((u) => {
-            const devPin = import.meta.env.VITE_BYPASS_AUTH === 'true'
-              ? (u.role === 'admin' ? '1234' : '2222')
-              : null;
+            const devPin = u.devPin ?? null;
             return (
               <button
                 key={u.id}

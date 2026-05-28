@@ -240,6 +240,7 @@ export const staff = {
         initials: u.initials || initialsFor(u.name),
         color: u.color || '#999',
         avatarHue: u.avatarHue ?? 0,
+        devPin: u.devPin ?? null,
       }));
     }),
 
