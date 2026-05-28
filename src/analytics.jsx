@@ -129,7 +129,7 @@ function Analytics({ user, onLock, onBack }) {
 
   return (
     <div className="screen analytics-screen">
-      <TopBar user={user} title="Analíticas" onLock={onLock} onBack={onBack} onLogout={onLock} />
+      <TopBar user={user} title="Analíticas" onLock={onLock} onBack={onBack} />
       <div className="ana-body">
         <div className="ana-head">
           <div>

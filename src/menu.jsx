@@ -52,11 +52,6 @@ function TopBar({ user, title, onLock, onLogout, onBack, right }) {
         <button className="iconbtn" onClick={onLock} title="Bloquear">
           <Icons.Lock size={18} />
         </button>
-        {onLogout && (
-          <button className="iconbtn" onClick={onLogout} title="Cerrar sesión">
-            <Icons.Logout size={18} />
-          </button>
-        )}
       </div>
     </header>
   );

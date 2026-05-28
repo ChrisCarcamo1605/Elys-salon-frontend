@@ -211,7 +211,6 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
         title="Registrar venta"
         onLock={onLock}
         onBack={onBack}
-        onLogout={onLock}
         right={
           <div className="sale-context">
             <Icons.Receipt size={14} />

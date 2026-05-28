@@ -79,7 +79,7 @@ function App() {
     writeCookie({ ...prev, ...edits });
   }, [setTweakRaw]);
 
-  const [user, setUser] = useState(BYPASS_AUTH ? DEV_USER : null);
+  const [user, setUser] = useState(null);
   const [hasDeviceToken, setHasDeviceToken] = useState(
     () => BYPASS_AUTH || import.meta.env.DEV || !!getDeviceToken(),
   );
@@ -300,7 +300,7 @@ function App() {
       content = <TimeClock user={user} onLock={lockBtn} onBack={() => setRoute("menu", { replace: true })}/>;
       break;
     case "settings":
-      content = <Settings user={user} onLock={lockBtn} onBack={() => setRoute("menu", { replace: true })}/>;
+      content = <Settings user={user} onLock={lockBtn} onBack={() => setRoute("menu", { replace: true })} onLogout={logout}/>;
       break;
     default:
       content = (

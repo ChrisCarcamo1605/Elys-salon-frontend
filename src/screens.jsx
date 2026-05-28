@@ -70,7 +70,7 @@ function Inventory({ user, onLock, onBack }) {
 
   return (
     <div className="screen inv-screen">
-      <TopBar user={user} title="Inventario" onLock={onLock} onBack={onBack} onLogout={onLock}/>
+      <TopBar user={user} title="Inventario" onLock={onLock} onBack={onBack}/>
       <div className="inv-body">
         <div className="inv-head">
           <div>
@@ -639,7 +639,7 @@ function Progress({ user, onLock, onBack }) {
 
   return (
     <div className="screen prog-screen">
-      <TopBar user={user} title="Mi progreso" onLock={onLock} onBack={onBack} onLogout={onLock}/>
+      <TopBar user={user} title="Mi progreso" onLock={onLock} onBack={onBack}/>
       <div className="prog-body">
         {/* Earnings summary */}
         <div className="earn-hero">
@@ -815,7 +815,7 @@ function Team({ user, onLock, onBack }) {
   }));
   return (
     <div className="screen">
-      <TopBar user={user} title="Equipo y bonos" onLock={onLock} onBack={onBack} onLogout={onLock}/>
+      <TopBar user={user} title="Equipo y bonos" onLock={onLock} onBack={onBack}/>
       <div className="ana-body">
         <div className="ana-head">
           <div>
@@ -969,7 +969,7 @@ const DEFAULT_SECTIONS = [
   },
 ];
 
-function Settings({ user, onLock, onBack }) {
+function Settings({ user, onLock, onBack, onLogout }) {
   const [sections, setSections] = useState(DEFAULT_SECTIONS);
   const [activeId, setActiveId] = useState(DEFAULT_SECTIONS[0].id);
   const [navOpen, setNavOpen] = useState(() => typeof window !== 'undefined' && window.innerWidth > 840);
@@ -1028,7 +1028,7 @@ function Settings({ user, onLock, onBack }) {
 
   return (
     <div className="screen settings-screen">
-      <TopBar user={user} title="Ajustes" onLock={onLock} onBack={onBack} onLogout={onLock}/>
+      <TopBar user={user} title="Ajustes" onLock={onLock} onBack={onBack}/>
       <div className={`settings-shell ${navOpen ? "nav-open" : ""}`}>
         <button
           className="settings-nav-backdrop"
@@ -1072,6 +1072,17 @@ function Settings({ user, onLock, onBack }) {
                 })}
             </div>
           ))}
+          {onLogout && (
+            <div className="settings-nav-group">
+              <button className="settings-nav-item settings-nav-signout" onClick={onLogout}>
+                <div className="settings-nav-ico"><Icons.Logout size={14}/></div>
+                <div className="settings-nav-text">
+                  <div className="settings-nav-label">Cerrar sesión</div>
+                  <div className="settings-nav-desc">Salir de este dispositivo</div>
+                </div>
+              </button>
+            </div>
+          )}
         </aside>
 
         <main className="settings-content" ref={contentRef}>

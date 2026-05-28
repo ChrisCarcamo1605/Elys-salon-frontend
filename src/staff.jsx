@@ -107,7 +107,7 @@ function Staff({ user, onLock, onBack }) {
 
   return (
     <div className="screen">
-      <TopBar user={user} title="Plantilla y nómina" onLock={onLock} onBack={onBack} onLogout={onLock}/>
+      <TopBar user={user} title="Plantilla y nómina" onLock={onLock} onBack={onBack}/>
       <div className="ana-body">
         <div className="ana-head">
           <div>
@@ -1150,7 +1150,7 @@ function TimeClock({ user, onLock, onBack }) {
 
   return (
     <div className="screen">
-      <TopBar user={user} title="Marcar entrada/salida" onLock={onLock} onBack={onBack} onLogout={onLock}/>
+      <TopBar user={user} title="Marcar entrada/salida" onLock={onLock} onBack={onBack}/>
       <div className="clock-body">
         <div className="clock-main">
           <div className="clock-card">

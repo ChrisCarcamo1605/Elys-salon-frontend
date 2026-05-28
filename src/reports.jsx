@@ -355,7 +355,7 @@ function Reports({ user, onLock, onBack, onNav }) {
 
   return (
     <div className="screen">
-      <TopBar user={user} title="Reportes y alertas" onLock={onLock} onBack={onBack} onLogout={onLock}/>
+      <TopBar user={user} title="Reportes y alertas" onLock={onLock} onBack={onBack}/>
       <div className="ana-body">
         <div className="ana-head">
           <div>
