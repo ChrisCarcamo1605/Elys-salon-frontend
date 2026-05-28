@@ -45,6 +45,8 @@ const Icons = {
   Backspace: (p) => <Icon {...p}><path d="M22 5H9L2 12l7 7h13a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1z"/><path d="M12.5 9.5l5 5M17.5 9.5l-5 5"/></Icon>,
   Grip: (p) => <Icon {...p} sw={0}><circle cx="9" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.5" fill="currentColor" stroke="none"/></Icon>,
   Refresh: (p) => <Icon {...p}><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-9-9 9 9 0 0 1 9-9c2.4 0 4.6.9 6.2 2.4L21 8"/><path d="M21 3v5h-5"/></Icon>,
+  Eye: (p) => <Icon {...p}><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></Icon>,
+  EyeOff: (p) => <Icon {...p}><path d="M17.9 17.9A9.9 9.9 0 0 1 12 19C5.6 19 2 12 2 12a17.8 17.8 0 0 1 5.1-5.9M9.5 4.6A9.2 9.2 0 0 1 12 5c6.4 0 10 7 10 7a17.8 17.8 0 0 1-2.3 3.5M3 3l18 18"/></Icon>,
 };
 
 export { Icons };

@@ -31,13 +31,19 @@ http.interceptors.response.use(
   }
 );
 
-// ─── Token store (memory only — never localStorage) ──────────────────────────
+// ─── Token store (JWT in memory; device token in localStorage) ───────────────
 
 let _token = null;
 
 export function setToken(t) { _token = t; }
 export function clearToken() { _token = null; }
 export function getToken() { return _token; }
+
+const DEVICE_KEY = 'elys_dt';
+
+export function getDeviceToken() { return localStorage.getItem(DEVICE_KEY); }
+export function setDeviceToken(t) { localStorage.setItem(DEVICE_KEY, t); }
+export function clearDeviceToken() { localStorage.removeItem(DEVICE_KEY); }
 
 // ─── Adapters: backend ↔ frontend shape translation ──────────────────────────
 
@@ -186,16 +192,33 @@ function stripUndefined(obj) {
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
 export const auth = {
-  /** Verifica PIN → devuelve { token, expiresAt, user, monthStats } */
-  unlock: (pin) =>
-    http.post('/auth/unlock', { pin }).then((r) => ({
+  /** Email + password → { deviceToken, token, user, monthStats } */
+  login: (email, password) =>
+    http.post('/auth/login', { email, password }).then((r) => ({
       ...r.data,
       user: fromUser(r.data.user),
     })),
 
-  /** Invalida el token actual (auditoría). No lanza si falla. */
+  /** PIN + deviceToken → { token, user, monthStats } */
+  unlock: (pin) => {
+    const deviceToken = getDeviceToken()
+      || (import.meta.env.DEV ? '__dev__' : '');
+    return http.post('/auth/unlock', { pin, deviceToken }).then((r) => ({
+      ...r.data,
+      user: fromUser(r.data.user),
+    }));
+  },
+
+  /** Bloqueo de pantalla: revoca JWT, preserva device token */
   lock: () =>
-    http.post('/auth/lock').catch(() => { }),
+    http.post('/auth/lock').catch(() => {}),
+
+  /** Cierre completo: revoca device token */
+  logout: () => {
+    const deviceToken = getDeviceToken();
+    if (!deviceToken) return Promise.resolve();
+    return http.post('/auth/logout', { deviceToken }).catch(() => {});
+  },
 
   /** Hidrata sesión desde token guardado en memoria */
   me: () =>

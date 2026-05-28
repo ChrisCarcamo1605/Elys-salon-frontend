@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTweaks, TweaksPanel, TweakSection, TweakToggle, TweakColor, TweakRadio, TweakSlider, TweakButton } from './tweaks-panel.jsx';
 import { Icons } from './icons.jsx';
 import { LockScreen } from './lockscreen.jsx';
-import { setToken, clearToken, auth, settings as settingsApi } from './api.js';
+import { LoginScreen } from './login.jsx';
+import { setToken, clearToken, getDeviceToken, setDeviceToken, clearDeviceToken, auth, settings as settingsApi } from './api.js';
 import { fmtMoney } from './utils.js';
 import { TopBar, MainMenu } from './menu.jsx';
 import { SaleScreen } from './sales.jsx';
@@ -72,6 +73,9 @@ function App() {
   }, [setTweakRaw]);
 
   const [user, setUser] = useState(null);
+  const [hasDeviceToken, setHasDeviceToken] = useState(
+    () => import.meta.env.DEV || !!getDeviceToken(),
+  );
   const [route, setRoute] = useHashRouter();
   const [lockReason, setLockReason] = useState("");
   const [toast, setToast] = useState(null);
@@ -138,9 +142,19 @@ function App() {
   }, [setTweak]);
 
   const lock = (reason = "") => {
-    auth.lock(); // auditoría en backend, fire-and-forget
+    auth.lock();
     clearToken();
     setLockReason(reason);
+    setUser(null);
+    setRoute("menu", { replace: true });
+  };
+
+  const logout = () => {
+    auth.logout();
+    clearToken();
+    clearDeviceToken();
+    setHasDeviceToken(false);
+    setLockReason("");
     setUser(null);
     setRoute("menu", { replace: true });
   };
@@ -196,16 +210,38 @@ function App() {
   );
 
   if (!user) {
+    const onUnlock = ({ user, token }) => {
+      setToken(token);
+      setUser(user);
+      setLockReason("");
+    };
+
+    const onLogin = ({ user, token }) => {
+      setToken(token);
+      setUser(user);
+      setHasDeviceToken(true);
+      setLockReason("");
+    };
+
+    const onDeviceExpired = () => {
+      clearDeviceToken();
+      setHasDeviceToken(false);
+    };
+
     return (
       <>
-        <LockScreen
-          onUnlock={({ user, token }) => {
-            setToken(token);
-            setUser(user);
-            setLockReason("");
-          }}
-          reason={lockReason}
-        />
+        {hasDeviceToken
+          ? (
+            <LockScreen
+              onUnlock={onUnlock}
+              onDeviceExpired={onDeviceExpired}
+              reason={lockReason}
+            />
+          )
+          : (
+            <LoginScreen onLogin={onLogin} />
+          )
+        }
         {toast && (
           <div className="toast">
             <div className="toast-ico">
@@ -264,7 +300,7 @@ function App() {
           user={user}
           onNav={setRoute}
           onLock={lockBtn}
-          onLogout={() => lock("Sesión cerrada")}
+          onLogout={logout}
           lockTimeoutSec={t.lockTimeoutSec}
         />
       );

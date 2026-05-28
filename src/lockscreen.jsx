@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Icons } from './icons.jsx';
 import { auth, staff as staffApi, apiError } from './api.js';
 
-function LockScreen({ onUnlock, reason }) {
+function LockScreen({ onUnlock, onDeviceExpired, reason }) {
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [shake, setShake] = useState(false);
@@ -56,6 +56,10 @@ function LockScreen({ onUnlock, reason }) {
       onUnlock({ user: { ...user, monthStats }, token });
     } catch (err) {
       const status = err.response?.status;
+      if (status === 403) {
+        onDeviceExpired?.();
+        return;
+      }
       const msg =
         status === 429 ? "Demasiados intentos, espera 5 min" :
         status === 401 ? "PIN incorrecto" :
@@ -146,6 +150,13 @@ function LockScreen({ onUnlock, reason }) {
             : <><span className="lock-foot-dot"/>{" "}Terminal segura · Auto-bloqueo activo</>
           }
         </div>
+
+        {import.meta.env.DEV && (
+          <div className="lock-dev-hint">
+            <span className="lock-dev-badge">DEV</span>
+            admin <strong>1234</strong> · empleada <strong>2222</strong>
+          </div>
+        )}
       </div>
 
       {/* Desktop bottom user pills */}
