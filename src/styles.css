@@ -1222,6 +1222,10 @@ button, a, [role="button"] { touch-action: manipulation; }
   background: var(--surface);
   border-radius: var(--radius-lg);
   width: min(440px, 92vw);
+  max-height: min(88vh, 88dvh);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   box-shadow: var(--shadow-lg);
   padding: 24px;
   animation: pop 0.18s ease;
@@ -4758,8 +4762,6 @@ select.form-input { appearance: none; padding-right: 32px; cursor: pointer;
     height: 100dvh;
     max-height: 100dvh;
     border-radius: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
     padding: 16px;
   }
   .modal-back { padding: 0; align-items: stretch; }
