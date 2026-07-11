@@ -367,7 +367,6 @@ function Reports({ user, onLock, onBack, onNav }) {
         <div className="tabs" style={{ marginBottom: 20, padding: 0 }}>
           {[
             { id: "alerts",   label: "Alertas",          icon: "TrendUp" },
-            { id: "history",  label: "Historial de ventas", icon: "Cash" },
             { id: "reports",  label: "Generar reportes", icon: "Receipt" },
           ].map((t) => {
             const IconComp = Icons[t.icon];
@@ -385,7 +384,6 @@ function Reports({ user, onLock, onBack, onNav }) {
         </div>
 
         {tab === "alerts"  && <AlertsPanel onNav={onNav} onAction={showToast}/>}
-        {tab === "history" && <SalesHistory user={user} onAction={showToast}/>}
         {tab === "reports" && <ReportsPanel onAction={showToast}/>}
       </div>
 
@@ -1985,4 +1983,4 @@ function ReportsPanel({ onAction }) {
   );
 }
 
-export { exportUtils, Reports };
+export { exportUtils, Reports, SalesHistory };

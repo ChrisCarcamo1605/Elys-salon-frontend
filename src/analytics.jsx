@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import { Icons } from './icons.jsx';
 import { TopBar } from './menu.jsx';
+import { SalesHistory } from './reports.jsx';
 import { analytics as analyticsApi, branches as branchesApi, apiError } from './api.js';
 import { fmtMoney } from './utils.js';
 
@@ -35,6 +36,13 @@ function localDateStr(d) {
 function Analytics({ user, onLock, onBack }) {
   const today = localDateStr(new Date());
   const isAdmin = user?.role === 'admin';
+
+  const [section, setSection] = React.useState('resumen'); // 'resumen' | 'history'
+  const [toast, setToast] = React.useState(null);
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2800);
+  };
 
   const [range, setRange] = React.useState('30d');
   const [customFrom, setCustomFrom] = React.useState(() => {
@@ -147,6 +155,25 @@ function Analytics({ user, onLock, onBack }) {
     <div className="screen analytics-screen">
       <TopBar user={user} title="Analíticas" onLock={onLock} onBack={onBack} />
       <div className="ana-body">
+        <div className="tabs" style={{ marginBottom: 20, padding: 0 }}>
+          <button
+            className={`tab ${section === 'resumen' ? 'active' : ''}`}
+            onClick={() => setSection('resumen')}
+          >
+            <Icons.Chart size={13}/> <span style={{ marginLeft: 6 }}>Resumen</span>
+          </button>
+          <button
+            className={`tab ${section === 'history' ? 'active' : ''}`}
+            onClick={() => setSection('history')}
+          >
+            <Icons.Cash size={13}/> <span style={{ marginLeft: 6 }}>Historial de ventas</span>
+          </button>
+        </div>
+
+        {section === 'history' && <SalesHistory user={user} onAction={showToast}/>}
+
+        {section === 'resumen' && (
+        <>
         <div className="ana-head">
           <div>
             <div className="ana-eyebrow">{loading ? 'Cargando…' : `Resumen · ${rangeLabel}`}</div>
@@ -400,7 +427,19 @@ function Analytics({ user, onLock, onBack }) {
             </div>
           </div>
         </div>
+        </>
+        )}
       </div>
+
+      {toast && (
+        <div className="toast">
+          <div className="toast-ico"><Icons.Check size={16}/></div>
+          <div>
+            <div className="toast-title">{toast.title || "Listo"}</div>
+            <div className="toast-sub">{toast.sub || toast}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

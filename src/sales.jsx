@@ -26,6 +26,7 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
   const [cartOpen, setCartOpen] = React.useState(false);
   const [customerName, setCustomerName] = React.useState("");
   const cartRef = React.useRef(null);
+  const cartHeadRef = React.useRef(null);
   const cartTouch = React.useRef(null);
   const [loading, setLoading] = React.useState(false);
 
@@ -204,6 +205,25 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
     }
   };
 
+  // React 18 registra los listeners de touch de JSX como pasivos, así que
+  // preventDefault() dentro de onTouchStart/onTouchMove no hace nada: el tap
+  // togglea la bandeja por el touch handler y luego el click sintético que
+  // el navegador dispara después la vuelve a togglear, cancelándose entre sí.
+  // Con listeners nativos {passive:false} preventDefault sí aplica.
+  React.useEffect(() => {
+    const el = cartHeadRef.current;
+    if (!el) return;
+    el.addEventListener('touchstart', onCartTouchStart, { passive: false });
+    el.addEventListener('touchmove', onCartTouchMove, { passive: false });
+    el.addEventListener('touchend', onCartTouchEnd, { passive: false });
+    return () => {
+      el.removeEventListener('touchstart', onCartTouchStart);
+      el.removeEventListener('touchmove', onCartTouchMove);
+      el.removeEventListener('touchend', onCartTouchEnd);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartOpen]);
+
   return (
     <div className="screen sale-screen">
       <TopBar
@@ -338,10 +358,8 @@ function SaleScreen({ user, onLock, onBack, onComplete, lockAfterSale = true }) 
         <aside className={`cart ${cartOpen ? "open" : ""}`} ref={cartRef}>
           <div
             className="cart-head"
+            ref={cartHeadRef}
             onClick={() => setCartOpen((o) => !o)}
-            onTouchStart={onCartTouchStart}
-            onTouchMove={onCartTouchMove}
-            onTouchEnd={onCartTouchEnd}
           >
             <div className="cart-title">
               <Icons.Cart size={18} /> Carrito
