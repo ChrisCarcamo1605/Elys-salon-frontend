@@ -2,7 +2,7 @@
 import React from 'react';
 import { Icons } from './icons.jsx';
 import { TopBar } from './menu.jsx';
-import { alerts as alertsApi, promotions as promotionsApi, reports as reportsApi, downloadBlob, apiError, analytics as analyticsApi, catalog as catalogApi, staff as staffApi, timeclock as timeclockApi, settings as settingsApi, sales as salesApi } from './api.js';
+import { alerts as alertsApi, promotions as promotionsApi, reports as reportsApi, downloadBlob, apiError, analytics as analyticsApi, catalog as catalogApi, staff as staffApi, timeclock as timeclockApi, settings as settingsApi, sales as salesApi, branches as branchesApi } from './api.js';
 import { fmtMoney } from './utils.js';
 
 // ============================================================
@@ -385,7 +385,7 @@ function Reports({ user, onLock, onBack, onNav }) {
         </div>
 
         {tab === "alerts"  && <AlertsPanel onNav={onNav} onAction={showToast}/>}
-        {tab === "history" && <SalesHistory onAction={showToast}/>}
+        {tab === "history" && <SalesHistory user={user} onAction={showToast}/>}
         {tab === "reports" && <ReportsPanel onAction={showToast}/>}
       </div>
 
@@ -1065,7 +1065,12 @@ function SalesTableRow({ sale, onVoidRequest }) {
         onClick={() => setExpanded((v) => !v)}
       >
         <td className="sh-cell sh-cell--date">{fmtDateTime(sale.date, sale.time)}</td>
-        <td className="sh-cell">{sale.employeeName ?? '—'}</td>
+        <td className="sh-cell">
+          <div>{sale.employeeName ?? '—'}</div>
+          {sale.branchName && (
+            <div style={{ fontSize: 11, color: 'var(--ink-dim)' }}>{sale.branchName}</div>
+          )}
+        </td>
         <td className="sh-cell sh-cell--num">{lines.length}</td>
         <td className="sh-cell sh-cell--num sh-cell--money">{fmtMoney(sale.total ?? 0)}</td>
         <td className="sh-cell">
@@ -1183,8 +1188,9 @@ function SalesVoidModal({ sale, onClose, onConfirm }) {
   );
 }
 
-function SalesHistory({ onAction }) {
+function SalesHistory({ user, onAction }) {
   const today = new Date().toISOString().split('T')[0];
+  const isAdmin = user?.role === 'admin';
 
   const [range, setRange]           = React.useState('30d');
   const [customFrom, setCustomFrom] = React.useState(() => {
@@ -1192,6 +1198,8 @@ function SalesHistory({ onAction }) {
     return d.toISOString().split('T')[0];
   });
   const [customTo, setCustomTo]     = React.useState(today);
+  const [branchList, setBranchList] = React.useState([]);
+  const [branchId, setBranchId]     = React.useState('');
 
   const [sales, setSales]     = React.useState([]);
   const [loading, setLoading] = React.useState(false);
@@ -1201,18 +1209,24 @@ function SalesHistory({ onAction }) {
 
   const PAGE_SIZE = 20;
 
+  React.useEffect(() => {
+    if (!isAdmin) return;
+    branchesApi.list().then(setBranchList).catch(() => {});
+  }, [isAdmin]);
+
   const activeParams = React.useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
+    const base = branchId ? { branchId } : {};
     if (range === 'custom') {
       if (customFrom && customTo && customFrom <= customTo)
-        return { from: customFrom, to: customTo };
+        return { ...base, from: customFrom, to: customTo };
       return null;
     }
     const daysBack = { today: 0, '7d': 6, '30d': 29, '90d': 89, '365d': 364 }[range] ?? 29;
     const from = new Date();
     from.setDate(from.getDate() - daysBack);
-    return { from: from.toISOString().split('T')[0], to: todayStr };
-  }, [range, customFrom, customTo]);
+    return { ...base, from: from.toISOString().split('T')[0], to: todayStr };
+  }, [range, customFrom, customTo, branchId]);
 
   const paramsKey = activeParams ? JSON.stringify(activeParams) : null;
 
@@ -1257,6 +1271,22 @@ function SalesHistory({ onAction }) {
         customFrom={customFrom} setCustomFrom={setCustomFrom}
         customTo={customTo}    setCustomTo={setCustomTo}
       />
+
+      {isAdmin && branchList.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <select
+            className="form-input"
+            style={{ maxWidth: 240 }}
+            value={branchId}
+            onChange={(e) => setBranchId(e.target.value)}
+          >
+            <option value="">Todas las sucursales</option>
+            {branchList.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {!loading && !error && sales.length > 0 && (
         <SalesSummaryStrip sales={sales}/>

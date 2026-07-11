@@ -24,6 +24,7 @@ const Icons = {
   Trophy: (p) => <Icon {...p}><path d="M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M7 6H4.5a2 2 0 0 0 0 4H7M17 6h2.5a2 2 0 0 1 0 4H17"/><path d="M9.5 13.5 9 18h6l-.5-4.5M8 20.5h8"/></Icon>,
   Settings: (p) => <Icon {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l1.8-1.4-2-3.4-2.2.8a7.6 7.6 0 0 0-2.6-1.5L14 2h-4l-.4 2a7.6 7.6 0 0 0-2.6 1.5l-2.2-.8-2 3.4 1.8 1.4a7.6 7.6 0 0 0 0 3l-1.8 1.4 2 3.4 2.2-.8a7.6 7.6 0 0 0 2.6 1.5l.4 2h4l.4-2a7.6 7.6 0 0 0 2.6-1.5l2.2.8 2-3.4z"/></Icon>,
   Users: (p) => <Icon {...p}><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.7-3.5 3.3-5.5 6.5-5.5s5.8 2 6.5 5.5"/><circle cx="17" cy="9" r="2.8"/><path d="M16 14.7c2.7.2 4.6 1.9 5.2 4.8"/></Icon>,
+  Store: (p) => <Icon {...p}><path d="M4 9.5V20a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9.5"/><path d="M3 9.5 4.5 4h15L21 9.5"/><path d="M9 21v-6h6v6"/></Icon>,
   Search: (p) => <Icon {...p}><circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.5-3.5"/></Icon>,
   Plus: (p) => <Icon {...p}><path d="M12 5v14M5 12h14"/></Icon>,
   Minus: (p) => <Icon {...p}><path d="M5 12h14"/></Icon>,

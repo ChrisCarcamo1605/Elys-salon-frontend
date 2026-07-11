@@ -111,6 +111,14 @@ function MainMenu({ user, onNav, onLock, onLogout, lockTimeoutSec = 120 }) {
       permission: "users.read",
     },
     {
+      id: "branches",
+      title: "Sucursales",
+      desc: "Crea y administra ubicaciones",
+      icon: <Icons.Store size={28} />,
+      roles: ["admin"],
+      permission: "branches.write",
+    },
+    {
       id: "reports",
       title: "Reportes y alertas",
       desc: "Stock bajo, descuentos y exports",

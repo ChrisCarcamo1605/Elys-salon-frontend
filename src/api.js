@@ -81,6 +81,7 @@ function toUserBody(u, { isCreate } = {}) {
     salary: u.salary != null ? Number(u.salary) : undefined,
     commissionRate: u.commissionRate != null ? Number(u.commissionRate) : undefined,
     avatarHue: u.avatarHue != null ? Number(u.avatarHue) : undefined,
+    branchId: u.branchId === undefined ? undefined : (u.branchId || null),
   };
   if (isCreate && u.pin) {
     body.pin = u.pin;
@@ -263,6 +264,23 @@ export const staff = {
 
   changePin: (id, pin) =>
     http.patch(`/staff/${id}/pin`, { pin }),
+
+  /** Asigna/actualiza la contraseña de login por correo (p.ej. la cuenta de una sucursal). */
+  changePassword: (id, password) =>
+    http.patch(`/staff/${id}/password`, { password }),
+};
+
+// ─── Sucursales ──────────────────────────────────────────────────────────────
+
+export const branches = {
+  list: () =>
+    http.get('/branches').then((r) => (Array.isArray(r.data) ? r.data : (r.data?.items ?? []))),
+
+  create: (body) =>
+    http.post('/branches', body).then((r) => r.data),
+
+  update: (id, body) =>
+    http.patch(`/branches/${id}`, body).then((r) => r.data),
 };
 
 // ─── Permisos ────────────────────────────────────────────────────────────────
@@ -384,6 +402,7 @@ function fromSaleItem(s) {
   return {
     ...s,
     employeeName: s.employee?.name ?? s.employeeName ?? null,
+    branchName: s.branch?.name ?? null,
     date: dateStr ?? null,
     time: timeRaw ? timeRaw.slice(0, 5) : null,
     voided: s.status === 'voided',
@@ -749,8 +768,8 @@ export const analytics = {
     })),
 
   /** Tráfico por hora en una fecha */
-  hourlyTraffic: (date) =>
-    http.get('/analytics/hourly-traffic', { params: { date } }).then((r) => ({
+  hourlyTraffic: (date, branchId) =>
+    http.get('/analytics/hourly-traffic', { params: { date, branchId } }).then((r) => ({
       items: fromHourlyTraffic(Array.isArray(r.data) ? r.data : r.data?.items),
     })),
 
