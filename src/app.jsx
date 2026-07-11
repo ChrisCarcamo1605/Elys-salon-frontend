@@ -9,6 +9,7 @@ import { TopBar, MainMenu } from './menu.jsx';
 import { SaleScreen } from './sales.jsx';
 import { Analytics } from './analytics.jsx';
 import { Staff, TimeClock } from './staff.jsx';
+import { Branches } from './branches.jsx';
 import { Reports } from './reports.jsx';
 import { Inventory, Progress, Team, Settings } from './screens.jsx';
 
@@ -349,6 +350,9 @@ function App() {
       break;
     case "staff":
       content = <Staff user={user} onLock={lockBtn} onBack={() => setRoute("menu", { replace: true })}/>;
+      break;
+    case "branches":
+      content = <Branches user={user} onLock={lockBtn} onBack={() => setRoute("menu", { replace: true })}/>;
       break;
     case "reports":
       content = <Reports user={user} onLock={lockBtn} onBack={() => setRoute("menu", { replace: true })} onNav={setRoute}/>;

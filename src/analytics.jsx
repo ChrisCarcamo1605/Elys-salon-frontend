@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import { Icons } from './icons.jsx';
 import { TopBar } from './menu.jsx';
-import { analytics as analyticsApi, apiError } from './api.js';
+import { analytics as analyticsApi, branches as branchesApi, apiError } from './api.js';
 import { fmtMoney } from './utils.js';
 
 const RANGES = [
@@ -25,25 +25,41 @@ function fmtDate(iso) {
   return `${+d}/${+m}`;
 }
 
+function localDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function Analytics({ user, onLock, onBack }) {
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDateStr(new Date());
+  const isAdmin = user?.role === 'admin';
 
   const [range, setRange] = React.useState('30d');
   const [customFrom, setCustomFrom] = React.useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 30);
-    return d.toISOString().split('T')[0];
+    return localDateStr(d);
   });
   const [customTo, setCustomTo] = React.useState(today);
+  const [branchList, setBranchList] = React.useState([]);
+  const [branchTab, setBranchTab] = React.useState(''); // '' = General (todas)
+
+  React.useEffect(() => {
+    if (!isAdmin) return;
+    branchesApi.list().then(setBranchList).catch(() => {});
+  }, [isAdmin]);
 
   // activeParams drives all API calls
   const activeParams = React.useMemo(() => {
+    const base = branchTab ? { branchId: branchTab } : {};
     if (range === 'custom') {
       if (customFrom && customTo && customFrom <= customTo)
-        return { from: customFrom, to: customTo };
+        return { ...base, from: customFrom, to: customTo };
       return null; // not ready yet
     }
-    return { range };
-  }, [range, customFrom, customTo]);
+    return { ...base, range };
+  }, [range, customFrom, customTo, branchTab]);
 
   const [loading, setLoading] = React.useState(false);
   const [salesByDay, setSalesByDay] = React.useState([]);
@@ -61,7 +77,7 @@ function Analytics({ user, onLock, onBack }) {
       analyticsApi.salesByDay(activeParams),
       analyticsApi.categoryRevenue(activeParams),
       analyticsApi.topEmployees(activeParams),
-      analyticsApi.hourlyTraffic(today),
+      analyticsApi.hourlyTraffic(today, branchTab || undefined),
       analyticsApi.kpis(activeParams),
     ]).then(([salesRes, catRes, empRes, hourlyRes, kpisRes]) => {
       if (salesRes.status === 'fulfilled')  setSalesByDay(salesRes.value.items);
@@ -138,6 +154,26 @@ function Analytics({ user, onLock, onBack }) {
           </div>
 
           <div className="ana-controls">
+            {isAdmin && branchList.length > 0 && (
+              <div className="tabs" style={{ padding: 0 }}>
+                <button
+                  className={`tab ${branchTab === '' ? 'active' : ''}`}
+                  onClick={() => setBranchTab('')}
+                >
+                  General
+                </button>
+                {branchList.map((b) => (
+                  <button
+                    key={b.id}
+                    className={`tab ${branchTab === b.id ? 'active' : ''}`}
+                    onClick={() => setBranchTab(b.id)}
+                  >
+                    {b.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="ana-range">
               {RANGES.map(r => (
                 <button

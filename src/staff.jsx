@@ -4,7 +4,7 @@ import React from 'react';
 import { Icons } from './icons.jsx';
 import { TopBar } from './menu.jsx';
 import { exportUtils } from './reports.jsx';
-import { staff as staffApi, timeclock as timeclockApi, payroll as payrollApi, apiError } from './api.js';
+import { staff as staffApi, timeclock as timeclockApi, payroll as payrollApi, branches as branchesApi, apiError } from './api.js';
 import { fmtMoney } from './utils.js';
 
 // Permisos otorgables individualmente a empleados
@@ -30,6 +30,7 @@ const GRANTABLE_PERMS = [
 function Staff({ user, onLock, onBack }) {
   const [tab, setTab] = React.useState("roster");
   const [employees, setEmployees] = React.useState([]);
+  const [branchList, setBranchList] = React.useState([]);
   const [editEmp, setEditEmp] = React.useState(null);
   const [confirmDelete, setConfirmDelete] = React.useState(null);
   const [toast, setToast] = React.useState(null);
@@ -41,6 +42,9 @@ function Staff({ user, onLock, onBack }) {
 
   React.useEffect(() => {
     staffApi.list().then((items) => setEmployees(items)).catch(() => {});
+    if (user.role === "admin") {
+      branchesApi.list().then(setBranchList).catch(() => {});
+    }
   }, []);
 
   const tabs = [
@@ -73,6 +77,12 @@ function Staff({ user, onLock, onBack }) {
   const changeEmployeePin = (id, pin) => {
     staffApi.changePin(id, pin)
       .then(() => showToast("PIN actualizado", "Cambios listos"))
+      .catch((err) => showToast("Error", apiError(err)));
+  };
+
+  const changeEmployeePassword = (id, password) => {
+    staffApi.changePassword(id, password)
+      .then(() => showToast("Contraseña actualizada", "Cambios listos"))
       .catch((err) => showToast("Error", apiError(err)));
   };
 
@@ -175,9 +185,11 @@ function Staff({ user, onLock, onBack }) {
       {editEmp && (
         <EmployeeModal
           employee={editEmp}
+          branches={branchList}
           onClose={() => setEditEmp(null)}
           onSave={saveEmployee}
           onChangePin={changeEmployeePin}
+          onChangePassword={changeEmployeePassword}
           onSavePermissions={savePermissions}
         />
       )}
@@ -748,9 +760,10 @@ function StaffPayroll({ employees }) {
 }
 
 // ---------- Employee modal (create/edit) ----------
-function EmployeeModal({ employee, onClose, onSave, onChangePin, onSavePermissions }) {
+function EmployeeModal({ employee, branches = [], onClose, onSave, onChangePin, onChangePassword, onSavePermissions }) {
   const [e, setE] = React.useState(employee);
   const [pinModal, setPinModal] = React.useState(false);
+  const [passwordModal, setPasswordModal] = React.useState(false);
   const [perms, setPerms] = React.useState(employee.permissions || {});
   const [permsSaving, setPermsSaving] = React.useState(false);
   const isNew = !employee.name;
@@ -817,6 +830,17 @@ function EmployeeModal({ employee, onClose, onSave, onChangePin, onSavePermissio
                   <option value="inactiva">Inactiva</option>
                 </select>
               </label>
+              {branches.length > 0 && (
+                <label className="form-row">
+                  <span className="form-label">Sucursal</span>
+                  <select className="form-input" value={e.branchId ?? ""} onChange={(ev) => upd("branchId", ev.target.value || null)}>
+                    <option value="">Sin asignar</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <label className="form-row">
                 <span className="form-label">Fecha de contratación</span>
                 <input type="date" className="form-input" value={e.hireDate} onChange={(ev) => upd("hireDate", ev.target.value)}/>
@@ -869,6 +893,20 @@ function EmployeeModal({ employee, onClose, onSave, onChangePin, onSavePermissio
                       onClick={() => setPinModal(true)}
                     >
                       <Icons.Lock size={12}/> Cambiar PIN
+                    </button>
+                  </div>
+                )}
+                {!isNew && (
+                  <div className="form-row">
+                    <span className="form-label">Contraseña (login por correo)</span>
+                    <button
+                      type="button"
+                      className="btn-ghost btn-sm"
+                      disabled={!e.email}
+                      title={!e.email ? "Agrega un correo primero" : undefined}
+                      onClick={() => setPasswordModal(true)}
+                    >
+                      <Icons.Lock size={12}/> Asignar contraseña
                     </button>
                   </div>
                 )}
@@ -972,6 +1010,75 @@ function EmployeeModal({ employee, onClose, onSave, onChangePin, onSavePermissio
           }}
         />
       )}
+
+      {passwordModal && (
+        <PasswordChangeModal
+          name={e.name}
+          onClose={() => setPasswordModal(false)}
+          onConfirm={(newPassword) => {
+            onChangePassword?.(e.id, newPassword);
+            setPasswordModal(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function PasswordChangeModal({ name, onClose, onConfirm }) {
+  const [password, setPassword] = React.useState("");
+  const [confirm, setConfirm] = React.useState("");
+  const match = password.length >= 6 && password === confirm;
+
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal" onClick={(ev) => ev.stopPropagation()} style={{ width: "min(420px, 92vw)" }}>
+        <div className="modal-head">
+          <div>
+            <div className="modal-eyebrow">Contraseña de acceso</div>
+            <div className="modal-title">{name}</div>
+            <div className="modal-sub">Para iniciar sesión por correo (p.ej. el celular de una sucursal).</div>
+          </div>
+          <button className="iconbtn" onClick={onClose}>
+            <Icons.X size={16}/>
+          </button>
+        </div>
+
+        <div className="form-grid" style={{ marginTop: 12 }}>
+          <label className="form-row">
+            <span className="form-label">Nueva contraseña</span>
+            <input
+              className="form-input"
+              type="password"
+              autoFocus
+              value={password}
+              onChange={(ev) => setPassword(ev.target.value)}
+            />
+          </label>
+          <label className="form-row">
+            <span className="form-label">Confirmar contraseña</span>
+            <input
+              className="form-input"
+              type="password"
+              value={confirm}
+              onChange={(ev) => setConfirm(ev.target.value)}
+            />
+          </label>
+        </div>
+
+        {!match && (password || confirm) && (
+          <div style={{ fontSize: 12, color: "var(--magenta)", marginTop: 8 }}>
+            {password.length < 6 ? "La contraseña debe tener al menos 6 caracteres." : "Las contraseñas no coinciden."}
+          </div>
+        )}
+
+        <div className="modal-foot" style={{ marginTop: 18 }}>
+          <button className="btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn-primary" disabled={!match} onClick={() => onConfirm(password)}>
+            <Icons.Check size={14}/> Guardar contraseña
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1077,6 +1184,7 @@ function TimeClock({ user, onLock, onBack }) {
   const [now, setNow] = React.useState(new Date());
   const [employees, setEmployees] = React.useState([]);
   const [entries, setEntries] = React.useState([]);
+  const [loadingEntries, setLoadingEntries] = React.useState(true);
   const [toast, setToast] = React.useState(null);
 
   React.useEffect(() => {
@@ -1089,7 +1197,8 @@ function TimeClock({ user, onLock, onBack }) {
       .then((data) => {
         if (data && Array.isArray(data.entries)) setEntries(data.entries);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoadingEntries(false));
     staffApi.list().then((items) => setEmployees(items)).catch(() => {});
   }, []);
 
@@ -1117,6 +1226,9 @@ function TimeClock({ user, onLock, onBack }) {
       setToast({ kind: "in", time: nowHM(), name: user.name });
       setTimeout(() => setToast(null), 3000);
     } catch (err) {
+      // 409 = ya había una entrada abierta (p.ej. tras un doble-tap); no se pierde
+      // la jornada, solo refrescamos para mostrar el botón de salida correcto.
+      await refreshEntries();
       const msg = apiError(err);
       setToast({ kind: "error", time: nowHM(), name: msg });
       setTimeout(() => setToast(null), 3000);
@@ -1171,13 +1283,14 @@ function TimeClock({ user, onLock, onBack }) {
             <button
               className={`clock-btn ${isWorking ? "clock-out" : "clock-in"}`}
               onClick={isWorking ? punchOut : punchIn}
+              disabled={loadingEntries}
             >
               <div className="clock-btn-ico">
                 {isWorking ? <Icons.Logout size={28}/> : <Icons.Unlock size={28}/>}
               </div>
               <div>
                 <div className="clock-btn-title">
-                  {isWorking ? "Marcar salida" : "Marcar entrada"}
+                  {loadingEntries ? "Cargando…" : isWorking ? "Marcar salida" : "Marcar entrada"}
                 </div>
                 <div className="clock-btn-sub">
                   {isWorking ? "Termina tu jornada" : "Comienza tu jornada"}

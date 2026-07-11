@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Icons } from './icons.jsx';
 import { TopBar } from './menu.jsx';
 import { ConfirmModal, EmployeeModal, PinChangeModal } from './staff.jsx';
-import { catalog as catalogApi, inventory as inventoryApi, goals as goalsApi, categories as categoriesApi, promotions as promotionsApi, permissions as permissionsApi, staff as staffApi, settings as settingsApi, sales as salesApi, upload as uploadApi, apiError } from './api.js';
+import { catalog as catalogApi, inventory as inventoryApi, goals as goalsApi, categories as categoriesApi, promotions as promotionsApi, permissions as permissionsApi, staff as staffApi, settings as settingsApi, sales as salesApi, upload as uploadApi, branches as branchesApi, apiError } from './api.js';
 import { fmtMoney } from './utils.js';
 
 // Inventory, Progress, Team, Settings screens
@@ -927,7 +927,7 @@ const DEFAULT_SECTIONS = [
   },
   {
     id: "users", group: "Equipo", label: "Usuarios",
-    desc: "Cuentas de acceso y PINs",
+    desc: "PINs, correos y contraseñas (scopes de sesión por dispositivo)",
     icon: "Users", kind: "users",
   },
   {
@@ -2097,13 +2097,23 @@ function SettingPromos({ section, onSave }) {
 
 function SettingUsers({ onSave }) {
   const [users, setUsers] = useState([]);
+  const [branchList, setBranchList] = useState([]);
   const [editEmp, setEditEmp] = useState(null);
   const [changePinFor, setChangePinFor] = useState(null);
 
   const loadUsers = () =>
     staffApi.list().then((items) => setUsers(items)).catch(() => {});
 
-  useEffect(() => { loadUsers(); }, []);
+  useEffect(() => {
+    loadUsers();
+    branchesApi.list().then(setBranchList).catch(() => {});
+  }, []);
+
+  const changePassword = (id, password) => {
+    staffApi.changePassword(id, password)
+      .then(() => onSave("Contraseña actualizada"))
+      .catch((err) => onSave(`Error: ${apiError(err)}`));
+  };
 
   const saveEmployee = (emp) => {
     const isNew = !users.some((e) => e.id === emp.id);
@@ -2144,6 +2154,9 @@ function SettingUsers({ onSave }) {
 
   return (
     <>
+      <div className="set-card" style={{ marginBottom: 14, fontSize: 12, color: "var(--ink-dim)", lineHeight: 1.5 }}>
+        Un correo con contraseña define el <b>alcance de sesión</b> de un dispositivo: una cuenta <b>Administrador</b> permite desbloquear con PIN a cualquier usuaria en ese celular/tablet; una cuenta <b>Empleado</b> solo desbloquea PINs de empleadas — nunca de administradoras. Usa "Asignar contraseña" para dar de alta el correo de un dispositivo (p.ej. el celular de una sucursal).
+      </div>
       <div className="set-card">
         <div className="users-list">
           {users.map((u) => (
@@ -2153,6 +2166,11 @@ function SettingUsers({ onSave }) {
                 <div style={{ fontWeight: 600 }}>{u.name}</div>
                 <div style={{ fontSize: 12, color: "var(--ink-dim)" }}>
                   {u.role === "admin" ? "Administrador" : "Empleado"} · PIN ●●●●
+                  {u.hasPassword
+                    ? " · Acceso por correo activo"
+                    : u.email
+                      ? " · Sin contraseña asignada"
+                      : ""}
                 </div>
               </div>
               <button className="btn-ghost btn-sm" onClick={() => setChangePinFor(u.id)}>Cambiar PIN</button>
@@ -2176,9 +2194,11 @@ function SettingUsers({ onSave }) {
       {editEmp && (
         <EmployeeModal
           employee={editEmp}
+          branches={branchList}
           onClose={() => setEditEmp(null)}
           onSave={saveEmployee}
           onChangePin={changePin}
+          onChangePassword={changePassword}
           onSavePermissions={savePermissions}
         />
       )}
