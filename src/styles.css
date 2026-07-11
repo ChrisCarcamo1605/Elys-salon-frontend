@@ -689,6 +689,17 @@ button, a, [role="button"] { touch-action: manipulation; }
    SALES SCREEN
    ============================================================ */
 
+/* `.screen` only sets min-height, so on desktop this page could grow taller
+   than the viewport instead of scrolling internally — pushing the cart's
+   totals/Cobrar button below the fold. Cap it so .catalog-grid/.cart-lines'
+   own overflow-y:auto (below) actually gets to scroll instead of the whole
+   page silently growing past 100vh. */
+.sale-screen {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
 .sale-body {
   flex: 1;
   display: grid;
