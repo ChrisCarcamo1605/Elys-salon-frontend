@@ -1212,18 +1212,18 @@ function SalesHistory({ user, onAction }) {
     branchesApi.list().then(setBranchList).catch(() => {});
   }, [isAdmin]);
 
+  // Los rangos rápidos ("Hoy", "7 días", ...) se resuelven en el servidor con
+  // el mismo cálculo de día-calendario local que usa Analytics — calcularlo
+  // aquí con new Date().toISOString() asume UTC y "Hoy" queda desfasado por
+  // horas cerca de la medianoche local (El Salvador es UTC-6).
   const activeParams = React.useMemo(() => {
-    const todayStr = new Date().toISOString().split('T')[0];
     const base = branchId ? { branchId } : {};
     if (range === 'custom') {
       if (customFrom && customTo && customFrom <= customTo)
         return { ...base, from: customFrom, to: customTo };
       return null;
     }
-    const daysBack = { today: 0, '7d': 6, '30d': 29, '90d': 89, '365d': 364 }[range] ?? 29;
-    const from = new Date();
-    from.setDate(from.getDate() - daysBack);
-    return { ...base, from: from.toISOString().split('T')[0], to: todayStr };
+    return { ...base, range };
   }, [range, customFrom, customTo, branchId]);
 
   const paramsKey = activeParams ? JSON.stringify(activeParams) : null;
