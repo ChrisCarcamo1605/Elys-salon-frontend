@@ -788,6 +788,11 @@ button, a, [role="button"] { touch-action: manipulation; }
   padding: 18px 24px 24px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  /* Without this, Chrome's default `auto` row sizing shrinks rows below
+     each card's natural content height to fit the now-bounded .sale-screen
+     (cards get squished instead of the grid scrolling). min-content keeps
+     rows at their real size and lets overflow-y:auto do the scrolling. */
+  grid-auto-rows: min-content;
   gap: 12px;
   align-content: start;
 }
