@@ -4448,7 +4448,14 @@ select.form-input { appearance: none; padding-right: 32px; cursor: pointer;
   .menu-card-arrow { bottom: 14px; right: 14px; opacity: 1; }
   .menu-foot { flex-direction: column; gap: 8px; align-items: flex-start; }
 
-  /* SALES — native document scroll on mobile so nothing is clipped */
+  /* SALES — native document scroll on mobile so nothing is clipped.
+     Release the desktop 100dvh + overflow:hidden lock, otherwise the fixed
+     height clips the catalog and the page can't scroll at all. */
+  .sale-screen {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
   .sale-body {
     display: block;
   }
