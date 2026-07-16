@@ -423,6 +423,14 @@ function fmtHours(mins) {
   const m = mins % 60;
   return m ? `${h}h ${m}m` : `${h}h`;
 }
+// Minutos entre dos "HH:MM"; si la jornada cruza medianoche suma 24h (igual que el backend).
+function spanMins(inHM, outHM) {
+  const [ih, im] = inHM.split(":").map(Number);
+  const [oh, om] = outHM.split(":").map(Number);
+  let mins = oh * 60 + om - (ih * 60 + im);
+  if (mins < 0) mins += 24 * 60;
+  return mins;
+}
 
 function StaffHours({ employees }) {
   const [range, setRange] = React.useState("week");
@@ -1209,9 +1217,7 @@ function TimeClock({ user, onLock, onBack }) {
 
   const myTotalMins = myEntries.reduce((s, t) => {
     if (!t.in) return s;
-    const [ih, im] = t.in.split(":").map(Number);
-    const [oh, om] = (t.out || nowHM()).split(":").map(Number);
-    return s + (oh * 60 + om - (ih * 60 + im));
+    return s + spanMins(t.in, t.out || nowHM());
   }, 0);
 
   const refreshEntries = () =>
@@ -1230,7 +1236,7 @@ function TimeClock({ user, onLock, onBack }) {
       // la jornada, solo refrescamos para mostrar el botón de salida correcto.
       await refreshEntries();
       const msg = apiError(err);
-      setToast({ kind: "error", time: nowHM(), name: msg });
+      setToast({ kind: "error", time: nowHM(), msg });
       setTimeout(() => setToast(null), 3000);
     }
   };
@@ -1243,7 +1249,7 @@ function TimeClock({ user, onLock, onBack }) {
       setTimeout(() => setToast(null), 3000);
     } catch (err) {
       const msg = apiError(err);
-      setToast({ kind: "error", time: nowHM(), name: msg });
+      setToast({ kind: "error", time: nowHM(), msg });
       setTimeout(() => setToast(null), 3000);
     }
   };
@@ -1346,11 +1352,7 @@ function TimeClock({ user, onLock, onBack }) {
                       </div>
                     </div>
                     <div className="punch-total">
-                      {(() => {
-                        const [ih, im] = t.in.split(":").map(Number);
-                        const [oh, om] = (t.out || nowHM()).split(":").map(Number);
-                        return fmtHours(oh * 60 + om - (ih * 60 + im));
-                      })()}
+                      {fmtHours(spanMins(t.in, t.out || nowHM()))}
                     </div>
                   </div>
                 ))}
@@ -1414,19 +1416,26 @@ function TimeClock({ user, onLock, onBack }) {
       {toast && (
         <div className={`punch-toast ${toast.kind}`}>
           <div className="punch-toast-ico">
-            {toast.kind === "in" ? <Icons.Unlock size={20}/> : <Icons.Logout size={20}/>}
+            {toast.kind === "in" ? <Icons.Unlock size={20}/>
+              : toast.kind === "out" ? <Icons.Logout size={20}/>
+              : <Icons.X size={20}/>}
           </div>
           <div>
             <div className="punch-toast-title">
-              {toast.kind === "in" ? "Entrada registrada" : "Salida registrada"}
+              {toast.kind === "in" ? "Entrada registrada"
+                : toast.kind === "out" ? "Salida registrada"
+                : "No se pudo registrar"}
             </div>
             <div className="punch-toast-sub">
-              {toast.name.split(" ")[0]} · {toast.time}
-              {toast.kind === "out" && ` (jornada de ${(() => {
-                const [ih, im] = toast.started.split(":").map(Number);
-                const [oh, om] = toast.time.split(":").map(Number);
-                return fmtHours(oh * 60 + om - (ih * 60 + im));
-              })()})`}
+              {toast.kind === "error" ? (
+                toast.msg
+              ) : (
+                <>
+                  {toast.name.split(" ")[0]} · {toast.time}
+                  {toast.kind === "out" && toast.started &&
+                    ` (jornada de ${fmtHours(spanMins(toast.started, toast.time))})`}
+                </>
+              )}
             </div>
           </div>
         </div>

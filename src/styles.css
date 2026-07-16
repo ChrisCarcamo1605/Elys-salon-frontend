@@ -3482,6 +3482,9 @@ select.form-input { appearance: none; padding-right: 32px; cursor: pointer;
 .punch-toast.out .punch-toast-ico {
   background: #475569;
 }
+.punch-toast.error .punch-toast-ico {
+  background: #dc2626;
+}
 .punch-toast-ico {
   width: 36px; height: 36px;
   border-radius: 100px;
