@@ -47,6 +47,26 @@ export function clearDeviceToken() { localStorage.removeItem(DEVICE_KEY); }
 
 // ─── Adapters: backend ↔ frontend shape translation ──────────────────────────
 
+// El backend devuelve createdAt como instante ISO en UTC. El salón opera en
+// El Salvador (UTC-6), así que fecha/hora deben calcularse en esa zona; partir
+// el string ISO mostraría la hora UTC (desfasada 6h, y con la fecha corrida
+// para ventas de la noche).
+const SALON_TZ = 'America/El_Salvador';
+function localDateTime(iso) {
+  if (!iso) return { date: null, time: null };
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) {
+    const [ds, tr] = String(iso).split('T');
+    return { date: ds ?? null, time: tr ? tr.slice(0, 5) : null };
+  }
+  return {
+    date: new Intl.DateTimeFormat('en-CA', { timeZone: SALON_TZ }).format(d),
+    time: new Intl.DateTimeFormat('en-GB', {
+      timeZone: SALON_TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).format(d),
+  };
+}
+
 // User entity from backend → frontend shape
 function fromUser(u) {
   if (!u) return u;
@@ -398,14 +418,13 @@ function toCreateSaleBody(s) {
 // and numeric columns (total, price, etc.) as strings from PostgreSQL.
 function fromSaleItem(s) {
   if (!s) return s;
-  const iso = s.createdAt ?? '';
-  const [dateStr, timeRaw] = iso.split('T');
+  const { date, time } = localDateTime(s.createdAt);
   return {
     ...s,
     employeeName: s.employee?.name ?? s.employeeName ?? null,
     branchName: s.branch?.name ?? null,
-    date: dateStr ?? null,
-    time: timeRaw ? timeRaw.slice(0, 5) : null,
+    date,
+    time,
     voided: s.status === 'voided',
     total: s.total != null ? Number(s.total) : 0,
     subtotal: s.subtotal != null ? Number(s.subtotal) : 0,

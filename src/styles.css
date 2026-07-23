@@ -5035,8 +5035,10 @@ select.form-input { appearance: none; padding-right: 32px; cursor: pointer;
 /* Mobile adjustments */
 @media (max-width: 640px) {
   .sh-strip-item { padding: 0 12px; }
-  .sh-cell--date { display: none; }
-  .sh-th:nth-child(1) { display: none; }
+  /* La fecha y hora de cada venta se mantienen visibles en móvil; la columna
+     se compacta (padding menor, sin partir la línea) en vez de ocultarse. */
+  .sh-cell--date { font-size: 11px; padding-left: 10px; padding-right: 6px; white-space: nowrap; }
+  .sh-th:nth-child(1) { padding-left: 10px; padding-right: 6px; }
   .sh-detail { padding: 16px 14px 18px; }
 }
 
